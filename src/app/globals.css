@@ -77,15 +77,18 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* GGH Design Tokens */
-  --ggh-primary: #2E7D32;
-  --ggh-primary-light: #4CAF50;
-  --ggh-accent: #FF6F00;
-  --ggh-accent-light: #FF9800;
+  /* GGH Professional Design Tokens */
+  --ggh-primary: #1B5E20;
+  --ggh-primary-light: #2E7D32;
+  --ggh-accent: #E65100;
+  --ggh-accent-light: #FF8F00;
   --ggh-bg: #FFFFFF;
-  --ggh-card: #F5F5F5;
-  --ggh-text: #1A1A1A;
-  --ggh-text-secondary: #666666;
+  --ggh-bg-alt: #FAFAFA;
+  --ggh-card: #FFFFFF;
+  --ggh-text: #212121;
+  --ggh-text-secondary: #757575;
+  --ggh-border: #E0E0E0;
+  --ggh-divider: #E0E0E0;
 }
 
 .dark {
@@ -134,4 +137,19 @@
 
 [dir="rtl"] body {
   font-family: var(--font-cairo), var(--font-inter), sans-serif;
+}
+
+/* Custom scrollbar for horizontal product sections */
+.ggh-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.ggh-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ggh-scroll::-webkit-scrollbar-thumb {
+  background: #E0E0E0;
+  border-radius: 4px;
+}
+.ggh-scroll::-webkit-scrollbar-thumb:hover {
+  background: #BDBDBD;
 }

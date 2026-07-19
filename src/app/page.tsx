@@ -7,7 +7,7 @@ import Header from '@/components/ggh/Header';
 import HeroBanner from '@/components/ggh/HeroBanner';
 import CategoryGrid from '@/components/ggh/CategoryGrid';
 import HotDeals from '@/components/ggh/HotDeals';
-import ProductGrid from '@/components/ggh/ProductGrid';
+import ProductSections from '@/components/ggh/ProductSections';
 import CartSlideOut, { type CartItem } from '@/components/ggh/CartSlideOut';
 import Footer from '@/components/ggh/Footer';
 
@@ -98,7 +98,7 @@ export default function Home() {
         <HeroBanner lang={lang} t={t} />
         <CategoryGrid lang={lang} t={t} />
         <HotDeals lang={lang} t={t} />
-        <ProductGrid lang={lang} t={t} onAddToCart={addToCart} />
+        <ProductSections lang={lang} t={t} onAddToCart={addToCart} />
       </main>
 
       {/* Footer - mt-auto pushes it to bottom */}

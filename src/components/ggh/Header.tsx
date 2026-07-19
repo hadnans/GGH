@@ -18,30 +18,30 @@ export default function Header({ lang, onToggleLang, cartCount, onOpenCart }: He
   const isRTL = lang === 'ar';
 
   return (
-    <header className="sticky top-0 z-40 bg-white shadow-md">
+    <header className="sticky top-0 z-40 bg-white border-b" style={{ borderColor: 'var(--ggh-border)' }}>
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center gap-3">
           {/* Mobile hamburger */}
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden h-12 w-12"
+            className="lg:hidden h-10 w-10"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
-            {mobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
+            {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </Button>
 
-          {/* Logo */}
-          <div className="flex flex-col items-center leading-tight shrink-0">
+          {/* Logo - inline: GGH + Gomla Go Home */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <span
-              className="text-3xl font-extrabold tracking-tight"
+              className="text-2xl font-bold tracking-tight"
               style={{ color: 'var(--ggh-primary)' }}
             >
               GGH
             </span>
-            <span className="text-xs font-medium text-gray-500">
-              {isRTL ? 'جملة' : 'Gomla Go Home'}
+            <span className="hidden sm:inline text-sm font-medium" style={{ color: 'var(--ggh-text-secondary)' }}>
+              {isRTL ? 'جملة لحد البيت' : 'Gomla Go Home'}
             </span>
           </div>
 
@@ -49,15 +49,17 @@ export default function Header({ lang, onToggleLang, cartCount, onOpenCart }: He
           <div className="flex-1 mx-2 hidden sm:block">
             <div className="relative">
               <Search
-                className={`absolute top-1/2 -translate-y-1/2 text-gray-400 size-5 ${
+                className={`absolute top-1/2 -translate-y-1/2 size-4 ${
                   isRTL ? 'right-3' : 'left-3'
                 }`}
+                style={{ color: '#9E9E9E' }}
               />
               <Input
                 placeholder={isRTL ? 'ابحث عن المنتجات...' : 'Search products...'}
-                className={`h-12 text-lg rounded-full bg-gray-50 border-gray-200 ${
-                  isRTL ? 'pr-11 pl-4' : 'pl-11 pr-4'
+                className={`h-10 text-sm rounded-lg border-0 ${
+                  isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'
                 }`}
+                style={{ backgroundColor: '#F5F5F5' }}
               />
             </div>
           </div>
@@ -65,8 +67,8 @@ export default function Header({ lang, onToggleLang, cartCount, onOpenCart }: He
           {/* Language toggle */}
           <Button
             variant="outline"
-            className="h-12 px-4 text-lg font-bold rounded-full border-2 shrink-0"
-            style={{ borderColor: 'var(--ggh-primary)', color: 'var(--ggh-primary)' }}
+            className="h-9 px-3 text-sm font-semibold rounded-lg shrink-0"
+            style={{ borderColor: 'var(--ggh-border)', color: 'var(--ggh-text-secondary)' }}
             onClick={onToggleLang}
           >
             {isRTL ? 'EN' : 'عربي'}
@@ -75,14 +77,14 @@ export default function Header({ lang, onToggleLang, cartCount, onOpenCart }: He
           {/* Cart button */}
           <Button
             variant="ghost"
-            className="relative h-12 w-12 shrink-0"
+            className="relative h-10 w-10 shrink-0"
             onClick={onOpenCart}
             aria-label={isRTL ? 'السلة' : 'Cart'}
           >
-            <ShoppingCart className="size-6" style={{ color: 'var(--ggh-primary)' }} />
+            <ShoppingCart className="size-5" style={{ color: 'var(--ggh-text)' }} />
             {cartCount > 0 && (
               <Badge
-                className="absolute -top-1 -right-1 h-6 min-w-6 flex items-center justify-center text-sm font-bold text-white px-1"
+                className="absolute -top-0.5 -right-0.5 h-5 min-w-5 flex items-center justify-center text-xs font-semibold text-white px-1"
                 style={{ backgroundColor: 'var(--ggh-accent)' }}
               >
                 {cartCount}
@@ -95,15 +97,17 @@ export default function Header({ lang, onToggleLang, cartCount, onOpenCart }: He
         <div className="mt-3 sm:hidden">
           <div className="relative">
             <Search
-              className={`absolute top-1/2 -translate-y-1/2 text-gray-400 size-5 ${
+              className={`absolute top-1/2 -translate-y-1/2 size-4 ${
                 isRTL ? 'right-3' : 'left-3'
               }`}
+              style={{ color: '#9E9E9E' }}
             />
             <Input
               placeholder={isRTL ? 'ابحث عن المنتجات...' : 'Search products...'}
-              className={`h-12 text-lg rounded-full bg-gray-50 border-gray-200 ${
-                isRTL ? 'pr-11 pl-4' : 'pl-11 pr-4'
+              className={`h-10 text-sm rounded-lg border-0 ${
+                isRTL ? 'pr-10 pl-4' : 'pl-10 pr-4'
               }`}
+              style={{ backgroundColor: '#F5F5F5' }}
             />
           </div>
         </div>
@@ -111,35 +115,35 @@ export default function Header({ lang, onToggleLang, cartCount, onOpenCart }: He
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t bg-white px-4 py-4">
-          <nav className="flex flex-col gap-3">
+        <div className="lg:hidden border-t bg-white px-4 py-3" style={{ borderColor: 'var(--ggh-border)' }}>
+          <nav className="flex flex-col gap-1">
             <a
               href="#categories"
-              className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-gray-50"
+              className="text-sm font-medium py-2.5 px-3 rounded-lg hover:bg-gray-50"
               style={{ color: 'var(--ggh-text)' }}
               onClick={() => setMobileMenuOpen(false)}
             >
-              {isRTL ? '📦 الأقسام' : '📦 Categories'}
+              {isRTL ? 'الأقسام' : 'Categories'}
             </a>
             <a
               href="#deals"
-              className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-gray-50"
+              className="text-sm font-medium py-2.5 px-3 rounded-lg hover:bg-gray-50"
               style={{ color: 'var(--ggh-text)' }}
               onClick={() => setMobileMenuOpen(false)}
             >
-              {isRTL ? '🔥 عروض ساخنة' : '🔥 Hot Deals'}
+              {isRTL ? 'عروض ساخنة' : 'Hot Deals'}
             </a>
             <a
               href="#products"
-              className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-gray-50"
+              className="text-sm font-medium py-2.5 px-3 rounded-lg hover:bg-gray-50"
               style={{ color: 'var(--ggh-text)' }}
               onClick={() => setMobileMenuOpen(false)}
             >
-              {isRTL ? '🛍️ منتجات شائعة' : '🛍️ Popular Products'}
+              {isRTL ? 'المنتجات' : 'Products'}
             </a>
             <a
               href="#footer"
-              className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-gray-50"
+              className="text-sm font-medium py-2.5 px-3 rounded-lg hover:bg-gray-50"
               style={{ color: 'var(--ggh-text)' }}
               onClick={() => setMobileMenuOpen(false)}
             >

@@ -56,13 +56,13 @@ export default function CartSlideOut({
       >
         {/* Header */}
         <SheetHeader className="p-4 pb-2">
-          <SheetTitle className="text-2xl font-bold flex items-center gap-2" style={{ color: 'var(--ggh-text)' }}>
-            <ShoppingCart className="size-6" style={{ color: 'var(--ggh-primary)' }} />
+          <SheetTitle className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--ggh-text)' }}>
+            <ShoppingCart className="size-5" style={{ color: 'var(--ggh-primary)' }} />
             {t.yourCart}
             {totalItems > 0 && (
               <span
-                className="text-base font-medium px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: 'var(--ggh-card)', color: 'var(--ggh-text-secondary)' }}
+                className="text-sm font-medium px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: '#F5F5F5', color: 'var(--ggh-text-secondary)' }}
               >
                 {totalItems} {t.items}
               </span>
@@ -75,8 +75,8 @@ export default function CartSlideOut({
         {/* Cart items */}
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-            <ShoppingCart className="size-16 mb-4" style={{ color: '#D0D0D0' }} />
-            <p className="text-xl font-semibold" style={{ color: 'var(--ggh-text-secondary)' }}>
+            <ShoppingCart className="size-12 mb-3" style={{ color: '#E0E0E0' }} />
+            <p className="text-base font-medium" style={{ color: 'var(--ggh-text-secondary)' }}>
               {t.emptyCart}
             </p>
           </div>
@@ -86,23 +86,23 @@ export default function CartSlideOut({
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex gap-3 p-3 rounded-xl"
-                  style={{ backgroundColor: 'var(--ggh-card)' }}
+                  className="flex gap-3 p-3 rounded-lg"
+                  style={{ backgroundColor: '#FAFAFA', border: '1px solid var(--ggh-border)' }}
                 >
                   {/* Item icon */}
                   <div
-                    className="w-14 h-14 flex items-center justify-center rounded-xl shrink-0"
-                    style={{ backgroundColor: '#FFFFFF' }}
+                    className="w-11 h-11 flex items-center justify-center rounded-full shrink-0"
+                    style={{ backgroundColor: '#F5F5F5' }}
                   >
-                    <span className="text-3xl">{item.icon}</span>
+                    <span className="text-xl">{item.icon}</span>
                   </div>
 
                   {/* Item details */}
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-base font-bold truncate" style={{ color: 'var(--ggh-text)' }}>
+                    <h4 className="text-sm font-semibold truncate" style={{ color: 'var(--ggh-text)' }}>
                       {lang === 'ar' ? item.nameAr : item.nameEn}
                     </h4>
-                    <p className="text-sm" style={{ color: 'var(--ggh-text-secondary)' }}>
+                    <p className="text-xs" style={{ color: 'var(--ggh-text-secondary)' }}>
                       {lang === 'ar' ? item.brandAr : item.brandEn}
                     </p>
 
@@ -113,28 +113,30 @@ export default function CartSlideOut({
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg"
+                          className="h-7 w-7 rounded-md"
+                          style={{ borderColor: 'var(--ggh-border)' }}
                           onClick={() => onUpdateQty(item.id, item.qty - 1)}
                           disabled={item.qty <= 1}
                         >
-                          <Minus className="size-4" />
+                          <Minus className="size-3" />
                         </Button>
-                        <span className="w-8 text-center text-lg font-bold" style={{ color: 'var(--ggh-text)' }}>
+                        <span className="w-7 text-center text-sm font-semibold" style={{ color: 'var(--ggh-text)' }}>
                           {item.qty}
                         </span>
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg"
+                          className="h-7 w-7 rounded-md"
+                          style={{ borderColor: 'var(--ggh-border)' }}
                           onClick={() => onUpdateQty(item.id, item.qty + 1)}
                         >
-                          <Plus className="size-4" />
+                          <Plus className="size-3" />
                         </Button>
                       </div>
 
                       {/* Price */}
                       <span
-                        className="text-lg font-extrabold"
+                        className="text-base font-bold"
                         style={{ color: 'var(--ggh-primary)' }}
                       >
                         {(item.price * item.qty).toFixed(1)} {t.egp}
@@ -146,10 +148,10 @@ export default function CartSlideOut({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 shrink-0 self-start"
+                    className="h-7 w-7 shrink-0 self-start"
                     onClick={() => onRemove(item.id)}
                   >
-                    <Trash2 className="size-4 text-red-500" />
+                    <Trash2 className="size-3.5 text-red-400" />
                   </Button>
                 </div>
               ))}
@@ -160,34 +162,34 @@ export default function CartSlideOut({
         {/* Footer with summary */}
         {items.length > 0 && (
           <SheetFooter className="p-4 pt-2">
-            <div className="w-full space-y-3">
+            <div className="w-full space-y-2">
               <Separator />
               {/* Subtotal */}
-              <div className="flex justify-between text-lg">
+              <div className="flex justify-between text-sm">
                 <span style={{ color: 'var(--ggh-text-secondary)' }}>{t.subtotal}</span>
-                <span className="font-bold" style={{ color: 'var(--ggh-text)' }}>
+                <span className="font-semibold" style={{ color: 'var(--ggh-text)' }}>
                   {subtotal.toFixed(1)} {t.egp}
                 </span>
               </div>
               {/* Delivery fee */}
-              <div className="flex justify-between text-lg">
+              <div className="flex justify-between text-sm">
                 <span style={{ color: 'var(--ggh-text-secondary)' }}>{t.deliveryFee}</span>
-                <span className="font-bold" style={{ color: 'var(--ggh-primary)' }}>
+                <span className="font-semibold" style={{ color: 'var(--ggh-primary)' }}>
                   {t.free}
                 </span>
               </div>
               <Separator />
               {/* Total */}
-              <div className="flex justify-between text-xl">
-                <span className="font-bold" style={{ color: 'var(--ggh-text)' }}>{t.total}</span>
-                <span className="font-extrabold" style={{ color: 'var(--ggh-primary)' }}>
+              <div className="flex justify-between text-lg">
+                <span className="font-semibold" style={{ color: 'var(--ggh-text)' }}>{t.total}</span>
+                <span className="font-bold" style={{ color: 'var(--ggh-primary)' }}>
                   {subtotal.toFixed(1)} {t.egp}
                 </span>
               </div>
 
               {/* Checkout button */}
               <Button
-                className="w-full h-14 text-xl font-bold rounded-xl mt-2"
+                className="w-full h-12 text-base font-semibold rounded-lg mt-1"
                 style={{ backgroundColor: 'var(--ggh-primary)', color: '#FFFFFF' }}
               >
                 {t.proceedToCheckout}
