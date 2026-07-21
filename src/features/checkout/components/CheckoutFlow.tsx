@@ -3,8 +3,9 @@
 import { useState, useCallback } from 'react';
 import { ArrowLeft, ArrowRight, Plus, MapPin, Truck, CreditCard, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 import {
   type Lang,
   type Address,
@@ -14,7 +15,7 @@ import {
 } from '@/types/ggh';
 import { t } from '@/lib/ggh/i18n';
 import { useLangStore } from '@/stores/lang-store';
-import { useCartStore } from '@/stores/cart-store';
+import { api } from '@/services/api';
 import AddressCard from './AddressCard';
 import AddressForm from './AddressForm';
 import DeliverySlotPicker from './DeliverySlotPicker';
@@ -26,7 +27,7 @@ interface CheckoutFlowProps {
   addresses: Address[];
   deliverySlots: DeliverySlot[];
   lang?: Lang;
-  onComplete: (order: Order) => void;
+  onComplete: (_order: Order) => void;
 }
 
 type CheckoutStep = 'address' | 'slot' | 'payment' | 'summary' | 'success';
@@ -41,20 +42,22 @@ const stepConfig: { id: CheckoutStep; labelKey: string; Icon: React.ComponentTyp
 export default function CheckoutFlow({ addresses, deliverySlots, lang: langProp, onComplete }: CheckoutFlowProps) {
   const { lang: storeLang, isRTL } = useLangStore();
   const lang = langProp ?? storeLang;
-  const { items } = useCartStore();
+  const queryClient = useQueryClient();
 
   const [currentStep, setCurrentStep] = useState<CheckoutStep>('address');
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     addresses.find((a) => a.isDefault)?.id || null
   );
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [localAddresses, setLocalAddresses] = useState<Address[]>(addresses);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
 
-  const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
+  const allAddresses = localAddresses;
+  const selectedAddress = allAddresses.find((a) => a.id === selectedAddressId);
 
   const stepIndex = stepConfig.findIndex((s) => s.id === currentStep);
   const canGoNext = (() => {
@@ -82,35 +85,26 @@ export default function CheckoutFlow({ addresses, deliverySlots, lang: langProp,
   }, [stepIndex]);
 
   const handlePlaceOrder = async () => {
+    if (!selectedAddressId || !selectedSlot) return;
     setIsPlacing(true);
-    // Simulate order placement
-    const mockOrder: Order = {
-      id: 'order-1',
-      orderNumber: 'GGH-2025-001',
-      customerId: 'customer-1',
-      status: 'pending',
-      paymentMethod,
-      paymentStatus: 'pending',
-      subtotal: 0 as any,
-      deliveryFee: 0 as any,
-      discountAmount: 0 as any,
-      totalAmount: 0 as any,
-      notes: '',
-      deliveryAddressSnapshot: '',
-      deliverySlot: selectedSlot || '',
-      deliveryDate: selectedDate,
-      deliveredAt: null,
-      driverName: '',
-      driverPhone: '',
-      items: [],
-      statusHistory: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setPlacedOrder(mockOrder);
-    setCurrentStep('success');
-    onComplete(mockOrder);
-    setIsPlacing(false);
+    try {
+      const response = await api.checkout({
+        addressId: selectedAddressId,
+        deliverySlot: selectedSlot,
+        deliveryDate: selectedDate,
+        paymentMethod,
+        notes: '',
+      });
+      const order = response.data;
+      setPlacedOrder(order);
+      setCurrentStep('success');
+      onComplete(order);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t(lang, 'errorGeneric');
+      toast.error(message);
+    } finally {
+      setIsPlacing(false);
+    }
   };
 
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
@@ -190,14 +184,19 @@ export default function CheckoutFlow({ addresses, deliverySlots, lang: langProp,
 
             {showAddressForm ? (
               <AddressForm
-                onSubmit={() => setShowAddressForm(false)}
+                onSubmit={(newAddress) => {
+                  setLocalAddresses((prev) => [...prev, newAddress]);
+                  setSelectedAddressId(newAddress.id);
+                  setShowAddressForm(false);
+                  queryClient.invalidateQueries({ queryKey: ['addresses'] });
+                }}
                 onCancel={() => setShowAddressForm(false)}
                 lang={lang}
               />
             ) : (
               <>
                 <div className="space-y-2">
-                  {addresses.map((addr) => (
+                  {allAddresses.map((addr) => (
                     <AddressCard
                       key={addr.id}
                       address={addr}

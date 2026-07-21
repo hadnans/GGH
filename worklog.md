@@ -151,3 +151,30 @@ Search (src/features/search/components/):
 Barrel exports created for each feature (index.ts).
 Page.tsx updated to use new store-integrated Header, Footer, CartSlideOut, MobileNav.
 Lint passes cleanly. Dev server running successfully.
+
+---
+Task ID: 1
+Agent: Repo Cleanup Executor
+Task: Repository Cleanup — Remove Dead Code, Duplicates, Fix Config
+
+Work Log:
+- Deleted 6 dead/duplicate components from src/components/ggh/: HotDeals, ProductGrid, ProductSections, CartSlideOut, CategoryGrid, HeroBanner
+- Deleted legacy mock data: src/lib/ggh/data.ts
+- Deleted placeholder files: public/ggh.html (59KB), examples/ directory (WebSocket demo)
+- Deleted 11 root screenshot PNGs
+- Deleted agent-ctx/ directory
+- Deleted bad API route: src/app/api/products/andle]/route.ts (typo)
+- Consolidated money utilities: added calcSavings, isFree, egpToPiastres, piastresToEgp to src/types/ggh.ts; made src/utils/money.ts a pure re-export
+- Fixed next.config.ts: removed ignoreBuildErrors, set reactStrictMode: true
+- Fixed tsconfig.json: set noImplicitAny: true
+- Fixed eslint.config.mjs: re-enabled no-unused-vars (warn), no-explicit-any (warn), exhaustive-deps (warn)
+- Fixed tailwind.config.ts: added ./src/**/*.{ts,tsx} to content paths
+- Removed 12 unused npm deps: @dnd-kit/*, @mdxeditor/editor, @reactuses/core, @tanstack/react-table, date-fns, next-auth, next-intl, react-markdown, sharp
+- Updated .env.example with all needed env vars (Database, App, ERPNext, Map Provider)
+- Updated .gitignore to exclude /*.png and /agent-ctx/
+- Git committed: 34 files changed, 130 insertions, 5170 deletions
+
+Stage Summary:
+- 0 lint errors (128 warnings, all pre-existing at warn level)
+- Dev server running successfully, all API routes returning 200
+- 12 unused npm packages removed, lockfile updated

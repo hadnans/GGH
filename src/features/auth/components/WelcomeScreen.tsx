@@ -12,9 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import { type Lang, type AuthResponse } from '@/types/ggh';
 import { t } from '@/lib/ggh/i18n';
 import { useLangStore } from '@/stores/lang-store';
+import { useAuthStore } from '@/stores/auth-store';
+import { api } from '@/services/api';
 
 interface WelcomeScreenProps {
   authResponse: AuthResponse;
@@ -53,14 +56,21 @@ const AREAS_AR = [
 export default function WelcomeScreen({ authResponse, onComplete, lang: langProp }: WelcomeScreenProps) {
   const { lang: storeLang, isRTL } = useLangStore();
   const lang = langProp ?? storeLang;
+  const { updateProfile } = useAuthStore();
 
   const [step, setStep] = useState<WelcomeStep>('name');
   const [name, setName] = useState(authResponse.customer.firstName || '');
   const [area, setArea] = useState('');
 
-  const handleNameNext = () => {
+  const handleNameNext = async () => {
     if (name.trim()) {
-      // Save name to profile
+      try {
+        const response = await api.updateProfile({ firstName: name.trim() });
+        updateProfile({ firstName: response.data.firstName });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : t(lang, 'errorGeneric');
+        toast.error(message);
+      }
     }
     setStep('area');
   };

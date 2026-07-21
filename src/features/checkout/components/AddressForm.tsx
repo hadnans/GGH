@@ -7,13 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 import { type Address, type Lang } from '@/types/ggh';
 import { t } from '@/lib/ggh/i18n';
 import { useLangStore } from '@/stores/lang-store';
+import { api } from '@/services/api';
 
 interface AddressFormProps {
   initialData?: Partial<Address>;
-  onSubmit: (data: Omit<Address, 'id' | 'customerId'>) => void;
+  onSubmit: (data: Address) => void;
   onCancel?: () => void;
   lang?: Lang;
 }
@@ -36,24 +38,35 @@ export default function AddressForm({ initialData, onSubmit, onCancel, lang: lan
   const [deliveryInstructions, setDeliveryInstructions] = useState(initialData?.deliveryInstructions || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault ?? true);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      label,
-      addressLine1,
-      addressLine2,
-      city,
-      area,
-      buildingNo,
-      floorNo,
-      apartmentNo,
-      landmark,
-      latitude: null,
-      longitude: null,
-      deliveryZone: '',
-      isDefault,
-      deliveryInstructions,
-    });
+    setIsSaving(true);
+    try {
+      const response = await api.addAddress({
+        label,
+        addressLine1,
+        addressLine2,
+        city,
+        area,
+        buildingNo,
+        floorNo,
+        apartmentNo,
+        landmark,
+        latitude: null,
+        longitude: null,
+        deliveryZone: '',
+        isDefault,
+        deliveryInstructions,
+      });
+      onSubmit(response.data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t(lang, 'errorGeneric');
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const labelOptions: { value: AddressLabel; Icon: React.ComponentType<{ className?: string }>; labelKey: string }[] = [
@@ -229,8 +242,9 @@ export default function AddressForm({ initialData, onSubmit, onCancel, lang: lan
           type="submit"
           className="flex-1 h-14 text-base font-bold rounded-xl"
           style={{ backgroundColor: 'var(--ggh-primary)', color: '#FFFFFF' }}
+          disabled={isSaving}
         >
-          {t(lang, 'saveAddress')}
+          {isSaving ? '...' : t(lang, 'saveAddress')}
         </Button>
         {onCancel && (
           <Button

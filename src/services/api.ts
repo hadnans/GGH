@@ -1,7 +1,7 @@
 // GGH — Gomla Go Home (جملة لحد البيت)
 // API Service Layer — BFF client for all backend communication
 
-import { type Lang, type Piastres, type Product, type Category, type Order, type Address, type AuthResponse, type ApiResponse, type PaginatedResponse, type DeliveryZone, type CheckoutData, type SearchResult } from '@/types/ggh';
+import { type Lang, type Piastres, type Product, type Category, type Order, type Address, type AuthResponse, type ApiResponse, type PaginatedResponse, type DeliveryZone, type DeliverySlot, type CheckoutData, type CartSummary, type CustomerProfile, type SearchResult } from '@/types/ggh';
 
 const API_BASE = '/api';
 
@@ -113,25 +113,25 @@ class ApiClient {
   // CART
   // ============================================
 
-  async getCart(): Promise<ApiResponse<unknown>> {
+  async getCart(): Promise<ApiResponse<CartSummary>> {
     return this.request('/cart');
   }
 
-  async addToCart(productId: string, quantity: number = 1): Promise<ApiResponse<unknown>> {
+  async addToCart(productId: string, quantity: number = 1): Promise<ApiResponse<CartSummary>> {
     return this.request('/cart/items', {
       method: 'POST',
       body: JSON.stringify({ productId, quantity }),
     });
   }
 
-  async updateCartItem(itemId: string, quantity: number): Promise<ApiResponse<unknown>> {
+  async updateCartItem(itemId: string, quantity: number): Promise<ApiResponse<CartSummary>> {
     return this.request(`/cart/items/${itemId}`, {
       method: 'PATCH',
       body: JSON.stringify({ quantity }),
     });
   }
 
-  async removeCartItem(itemId: string): Promise<ApiResponse<unknown>> {
+  async removeCartItem(itemId: string): Promise<ApiResponse<CartSummary>> {
     return this.request(`/cart/items/${itemId}`, { method: 'DELETE' });
   }
 
@@ -203,7 +203,7 @@ class ApiClient {
     return this.request('/delivery/zones');
   }
 
-  async getDeliverySlots(zoneId: string, date: string): Promise<ApiResponse<unknown>> {
+  async getDeliverySlots(zoneId: string, date: string): Promise<ApiResponse<DeliverySlot[]>> {
     return this.request(`/delivery/slots?zoneId=${zoneId}&date=${date}`);
   }
 
@@ -219,11 +219,11 @@ class ApiClient {
   // CUSTOMER PROFILE
   // ============================================
 
-  async getProfile(): Promise<ApiResponse<unknown>> {
+  async getProfile(): Promise<ApiResponse<CustomerProfile>> {
     return this.request('/customer/profile');
   }
 
-  async updateProfile(data: Record<string, unknown>): Promise<ApiResponse<unknown>> {
+  async updateProfile(data: Partial<CustomerProfile>): Promise<ApiResponse<CustomerProfile>> {
     return this.request('/customer/profile', {
       method: 'PATCH',
       body: JSON.stringify(data),
