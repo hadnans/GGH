@@ -1,144 +1,153 @@
+# GGH Project Worklog
+
 ---
-Task ID: 1-5
-Agent: main
-Task: Build GGH Gomla Go Home ecommerce platform GUI preview
+Task ID: 0
+Agent: Main Coordinator
+Task: Project setup and foundation infrastructure
 
 Work Log:
-- Created i18n translations file with full EN/AR translations
-- Created data file with 10 Egyptian products, 10 categories, 4 hot deals
-- Built 7 React components: Header, HeroBanner, CategoryGrid, HotDeals, ProductGrid, CartSlideOut, Footer
-- Built main page.tsx with language/cart state management, RTL support, localStorage persistence
-- Updated layout.tsx with Inter + Cairo Google Fonts and GGH metadata
-- Updated globals.css with GGH design tokens (green/orange palette) and font-family rules
-- Fixed CSS @import ordering error (moved Google Fonts to next/font/google instead)
-- Fixed accessibility duplicate text in CategoryGrid buttons
-- Verified in browser: page renders, language toggle works (EN↔AR with RTL), cart slide-out works, add-to-cart works, countdown timer works
-- Verified mobile responsive layout (375px viewport)
-- Lint passes cleanly, no console errors
+- Read and analyzed shekarty repo documentation (16 spec files)
+- Analyzed existing GGH project structure and components
+- Designed and created Prisma database schema with 20+ entities
+- Pushed schema to SQLite database successfully
+- Created shared TypeScript types (src/types/ggh.ts) with branded Piastres type
+- Created money formatting utilities (src/utils/money.ts)
+- Created Zustand stores: cart-store.ts, auth-store.ts, lang-store.ts
+- Created API service layer (src/services/api.ts) with full BFF client
+- Expanded i18n translations (src/lib/ggh/i18n.ts) with 150+ keys in EN/AR
+- Created feature directory structure under src/features/
 
 Stage Summary:
-- Complete GGH Gomla Go Home ecommerce platform preview is live at /
-- All features working: bilingual EN/AR, RTL layout, cart, countdown timer, mobile responsive
-- Files created: src/lib/ggh/i18n.ts, src/lib/ggh/data.ts, src/components/ggh/Header.tsx, HeroBanner.tsx, CategoryGrid.tsx, HotDeals.tsx, ProductGrid.tsx, CartSlideOut.tsx, Footer.tsx, src/app/page.tsx
-- Files modified: src/app/layout.tsx, src/app/globals.css
+- Database: 20+ Prisma models (Customer, Product, Category, Order, Address, etc.)
+- Types: Branded Piastres type, full domain model interfaces
+- Stores: Cart (persist), Auth (persist), Language (persist)
+- API: Full REST client with auth, products, cart, checkout, orders, addresses
+- i18n: 150+ bilingual translation keys covering all features
 
 ---
 Task ID: 1
-Agent: main
-Task: Redesign GGH Gomla Go Home — professional, modern, organized
+Agent: Main Coordinator
+Task: Full platform integration and verification
 
 Work Log:
-- Updated i18n.ts: removed emojis from translation keys, added brandName/brandSubtext, added 6 section translation keys (riceSection, pastaSection, oilSection, tomatoSection, sugarSection, teaSection) for EN/AR
-- Updated data.ts: added sectionOrder array for product grouping, added sectionKey to categories, updated category names to section names (e.g. "Rice" → "Rice & Grains"), removed bgColor from products/deals, updated category color to #F5F5F5
-- Updated globals.css: professional color palette (primary #1B5E20, accent #E65100, text #212121/#757575, border #E0E0E0), added ggh-scroll custom scrollbar styles, added --ggh-bg-alt, --ggh-border, --ggh-divider variables
-- Redesigned Header.tsx: inline logo (GGH + Gomla Go Home side-by-side), clean white with subtle border-bottom, smaller search bar with #F5F5F5 bg, smaller outlined language toggle, cleaner cart badge, no emojis in mobile menu
-- Redesigned HeroBanner.tsx: removed all floating/bouncing emojis, clean gradient #1B5E20→#2E7D32, subtle dot pattern overlay, smaller CTA button, professional typography (font-weight 600-700 instead of 800-900)
-- Redesigned CategoryGrid.tsx: small emojis (32px) in #F5F5F5 circles, white card backgrounds with subtle border, clean hover lift effect (not scale), 10 columns on desktop, section title with green accent bar
-- Redesigned HotDeals.tsx: white cards with subtle border, small discount pill badge (#FFF3E0 bg, #E65100 text), clean countdown timer, section title with orange accent bar, no colored product areas
-- Created ProductSections.tsx: NEW component replacing ProductGrid, groups products by category using sectionOrder, each section has green accent bar header + "View All →", horizontal scrollable rows, professional product cards (white bg, subtle shadow, 48px emoji circle, outlined Add to Cart button that fills on hover, price drop percentage badge)
-- Updated CartSlideOut.tsx: smaller compact design, rounded item icons, professional colors, tighter spacing
-- Redesigned Footer.tsx: dark green (#1B5E20) with 4-column grid layout (Brand, Quick Links, Contact, Social), social icons as circle buttons with Lucide icons, subtle white divider
-- Updated page.tsx: replaced ProductGrid import with ProductSections
-- Lint passes cleanly, dev server compiles and serves pages at 200
+- Created React Query provider (src/providers/query-provider.tsx)
+- Updated layout.tsx with Providers wrapper and Arabic default
+- Built complete main page (src/app/page.tsx) with multi-view system
+- Fixed product [handle] API route file naming
+- Updated Header component with callback props for search, account, orders
+- Updated MobileNav component with view change callbacks
+- Fixed DealCard component to accept both Deal and Product props
+- Added product icons to seed data (category-based icon mapping)
+- Wired up cart checkout button to navigate to checkout view
+- Verified all API routes return 200 status
+- Tested full user flow with Agent Browser
 
 Stage Summary:
-- Complete professional redesign of GGH platform — corporate B2B feel, no playful elements
-- Products organized by category in separate horizontal scroll sections
-- All playful elements removed (floating emojis, bounce animations, colored card backgrounds)
-- Professional color system: deep emerald green, warm amber accent, subtle grays
-- Files created: src/components/ggh/ProductSections.tsx
-- Files modified: src/lib/ggh/i18n.ts, src/lib/ggh/data.ts, src/app/globals.css, src/components/ggh/Header.tsx, HeroBanner.tsx, CategoryGrid.tsx, HotDeals.tsx, CartSlideOut.tsx, Footer.tsx, src/app/page.tsx
+- Complete ecommerce platform with: hero, categories, deals, products, cart, auth, checkout, orders, account
+- Full bilingual EN/AR support verified
+- OTP authentication flow works (phone → code 1234 → authenticated)
+- Cart add/remove/quantity controls working
+- Checkout flow navigates correctly
+- Mobile bottom navigation working
+- Lint passes clean
+- Zero console errors
 
 ---
-Task ID: 2
-Agent: main
-Task: Create standalone HTML file at /home/z/shekarty/index.html for GitHub Pages
+Task ID: 2-a
+Agent: Backend API Developer
+Task: Create ALL Backend API Routes
 
 Work Log:
-- Created complete self-contained HTML file (1875 lines, 56KB) at /home/z/shekarty/index.html
-- All CSS in <style> block, all JS in <script> block — zero external dependencies
-- Google Fonts loaded via <link>: Inter (400,500,600,700) + Cairo (400,500,600,700)
-- Design: Professional B2B corporate style, NOT childish/playful
-  - Color palette: primary #1B5E20, accent #E65100, clean grays and whites
-  - Typography: headings 600-700 weight, Inter for English, Cairo for Arabic
-  - No floating/bouncing emojis, no colorful backgrounds, no excessive shadows
-  - Emojis small (28-32px) in clean #F5F5F5 circles
-  - Section titles with 4px wide × 28px tall green accent bar on left side
-- Header: Clean white, GGH logo inline (GGH in green + Gomla Go Home in gray), search bar, EN/AR toggle, cart icon with badge
-- Hero Banner: Dark green gradient with subtle CSS dot pattern overlay, large headline, CTA button
-- Categories: 10 categories in horizontal scrollable row (emoji in gray circle + name below)
-- Hot Deals: 4 deal cards with discount pill badge, 3-hour countdown timer, orange accent bar
-- Product Sections: Products grouped by 6 categories (Rice & Grains, Pasta & Noodles, Oils & Fats, Canned Goods, Sugar & Sweeteners, Tea & Coffee), each in horizontal scrollable section
-- Product Cards: Professional design — 48px emoji circle, 16px name, brand·weight meta, green price, strikethrough was-price, amber discount pill, outlined Add to Cart button
-- Cart Slide-Out: Panel slides from right (LTR) or left (RTL), +/- quantity, remove, subtotal, free delivery, total, checkout button
-- Footer: Dark green #1B5E20, 4-column grid (Brand, Quick Links, Contact, Social), clean typography
-- JavaScript Features:
-  - Language toggle EN↔AR with full RTL layout flip, persisted in localStorage
-  - Add to Cart with "✓ Added" button feedback
-  - Cart panel with quantity controls, remove, subtotal/total calculation
-  - Countdown timer (3hrs) updating every second
-  - Mobile hamburger menu on small screens
-  - Smooth scroll for navigation links
-- Responsive: Mobile-first with breakpoints at 640px, 768px, 1024px, 1280px
-- Validated HTML structure (no unclosed/missing tags)
-- Works as standalone file AND served from GitHub Pages
+- Created auth helper utilities (src/lib/ggh/auth/index.ts): session management, token generation, response helpers, phone validation
+- Created 12 API route groups with 18 total route files
+- Added Deal-Product and Session-Customer relations to Prisma schema
+- Added multiplyPiastres/sumPiastres functions to ggh.ts types
+- Fixed email unique constraint issue for new customer creation
+- Seeded database with 10 categories, 39 products, 13 deals, 10 delivery zones
+- All endpoints tested and verified working
 
-Stage Summary:
-- Complete standalone HTML ecommerce preview for GGH Gomla Go Home
-- File: /home/z/shekarty/index.html (self-contained, no external dependencies)
-- All features: bilingual EN/AR, RTL, cart, countdown, mobile responsive
-- Professional corporate B2B design — no playful/childish elements
+API Routes Created:
+1. Auth: otp/send, otp/verify, session, logout
+2. Products: list (pagination/filtering/sorting), single by handle
+3. Categories: list with product counts, single by slug with products
+4. Cart: GET cart summary, POST add item, PATCH update quantity, DELETE remove item
+5. Checkout: POST create order (validates address, calculates totals, clears cart)
+6. Orders: list with pagination, single with items/history, cancel, reorder
+7. Addresses: list, create, update, delete (soft)
+8. Deals: list active deals with product info
+9. Delivery: zones list, slots by zone+date
+10. Search: products + categories by query
+11. Customer: GET/PATCH profile
+12. Seed: POST seed database with Egyptian grocery data
+
+Key Design Decisions:
+- All monetary values in integer piastres (EGP 25 = 2500)
+- Phone numbers normalized to Egyptian format (+20...)
+- Session tokens stored in HttpOnly cookies (ggh-session)
+- OTP: dev mode always accepts "1234"
+- Cart uses upsert for add (increments quantity if exists)
+- Checkout generates order numbers: GGH-YYYYMMDD-XXXX
+- Separate queries used for relations to avoid Prisma client cache issues during dev hot reload
+- Deals endpoint uses manual join pattern instead of include due to HMR caching
 
 ---
+Task ID: 2-b
+Agent: Frontend Component Developer
+Task: Create complete GGH Frontend Component Library
 
-## Task ID: 2 — GGH Gomla Go Home Complete Redesign
+Work Log:
+- Created 27 production-ready React components across 7 feature domains
+- All components support EN/AR bilingual with RTL via useLangStore
+- All components use 48px+ touch targets (elder-friendly design)
+- All components use shadcn/ui building blocks with GGH color system
+- All components use framer-motion for subtle animations
+- All text goes through translation system (t(lang, key))
+- Proper ARIA labels on all interactive elements
+- Loading states with skeleton components, error states handled
 
-**Date:** 2025-03-05  
-**Agent:** Senior UI/UX Designer & Senior Frontend Engineer
+Components Created:
 
-### Summary
-Completely redesigned the GGH Gomla Go Home website from the ground up following a detailed premium design specification. The site now communicates a professional wholesale grocery marketplace with home delivery, not a generic e-commerce template.
+Layout (src/components/ggh/):
+- Header.tsx: Sticky header with search, lang toggle, cart badge, mobile menu (framer-motion)
+- Footer.tsx: Full footer with brand, links, contact, social, copyright
+- MobileNav.tsx: Bottom mobile nav (4 tabs), active indicator, cart badge, safe area
 
-### What Was Done
+Product (src/features/product/components/):
+- ProductCard.tsx: Card with emoji, prices, discount badge, stock, rating, add-to-cart feedback
+- ProductGrid.tsx: Responsive grid (2/3/4 cols), skeleton loading, empty state
+- ProductDetail.tsx: Full detail with quantity selector (56px targets), price breakdown
+- CategoryGrid.tsx: Category grid with product counts, staggered entrance animation
+- DealCard.tsx: Deal card with countdown, stock progress bar, urgency styling
+- DealTimer.tsx: Countdown timer with amber/red colors, updates every second
 
-#### CSS Redesign
-- Replaced entire design token system with refined premium color variables (--primary-50 through --primary-900, --accent-50 through --accent-700, --neutral-50 through --neutral-950)
-- Implemented professional typography system with Inter (EN) and Cairo (AR) fonts, proper weight/size hierarchy
-- Added shadow system (--shadow-xs through --shadow-lg) and radius system (--radius-xs through --radius-2xl)
-- Sticky header with scroll shadow effect, pill-shaped search input, refined logo with separator
-- Two-column hero layout (60/40) with trust badge, dual CTAs, trust signals, and decorative visual card
-- Value props bar (4 items in a row) with primary-50 background
-- How It Works section with 3 numbered steps and dashed connecting line
-- Categories as card grid (5 cols desktop) with horizontal scroll on mobile
-- Hot Deals with accent bar, countdown timer, savings pills
-- Product sections with zebra striping, refined card design with today/was labels and savings pills
-- Why GGH trust section with 3 feature cards
-- Dark footer (neutral-950) with 4-column grid and social icons
-- Cart slide-out with pill-shaped quantity controls, 400px width desktop / full-width mobile
-- Full responsive breakpoints (640px, 768px, 1024px, 1280px)
-- Micro-interactions: card hover translateY(-2px), button transitions, cart slide 300ms ease-out
-- Accessibility: focus-visible rings, ARIA labels, sr-only class, minimum 44px touch targets
+Cart (src/features/cart/components/):
+- CartSlideOut.tsx: Cart drawer (shadcn Sheet), RTL-aware, free delivery progress
+- CartItemRow.tsx: Item row with quantity controls, line total, remove
+- CartSummary.tsx: Subtotal, delivery fee, total, free delivery threshold
 
-#### HTML Structure
-- New hero section with two-column layout, trust badge, dual CTAs, trust signals
-- New value props bar section
-- New How It Works section with 3 steps
-- Categories with both grid (desktop) and scroll (mobile) containers
-- Refined Hot Deals section with accent bars and savings pills
-- Product sections with zebra striping
-- New Why GGH trust section
-- Redesigned footer (dark theme)
-- Cart slide-out with improved layout
+Auth (src/features/auth/components/):
+- LoginForm.tsx: Phone + OTP flow, Egyptian format, resend countdown
+- OtpInput.tsx: 4-digit OTP, auto-focus, paste support, 56px touch targets
+- WelcomeScreen.tsx: New user welcome with name + area selection, skip option
 
-#### JavaScript Updates
-- Preserved ALL existing functionality (language toggle, cart logic, countdown, mobile menu, smooth scroll)
-- Added 8 new products (IDs 11-18): Flour (Ten Ten, Betal), Fava Beans (El Ezz), Lentils, Instant Coffee (Tchibo), Ghee (Beyti), Spices Mix, Dish Soap (Pril)
-- Updated SECTION_ORDER to include all 10 categories: ['rice', 'pasta', 'oil', 'flour', 'tomato', 'sugar', 'beans', 'tea', 'coffee', 'cleaning']
-- Added 20+ new i18n translation keys (howItWorksTitle, step1-3 titles/descriptions, whyGgh keys, trust signals, etc.)
-- New render functions: renderValueProps(), renderHowItWorks(), renderWhyGgh()
-- All new render functions called from setLanguage() for proper i18n support
-- Added header scroll shadow effect via scroll event listener
+Checkout (src/features/checkout/components/):
+- CheckoutFlow.tsx: Multi-step checkout with visual step indicator
+- AddressCard.tsx: Address card with label icon, default badge, radio selection
+- AddressForm.tsx: Full address form with label selector, 48px+ inputs
+- DeliverySlotPicker.tsx: Date + time slot selection with availability
+- PaymentMethodSelector.tsx: COD default, card/wallet coming soon
+- OrderSummary.tsx: Item list, summaries, place order button
+- OrderSuccess.tsx: Confirmation with checkmark animation
 
-### Files Modified
-- `/home/z/shekarty/index.html` — Complete rewrite (2665 lines)
+Order (src/features/order/components/):
+- OrderCard.tsx: Order list item with status badge, color-coded
+- OrderDetail.tsx: Full detail with timeline, items, reorder/cancel
+- OrderTimeline.tsx: Vertical stepper, 6 steps, color-coded states
 
+Search (src/features/search/components/):
+- SearchBar.tsx: Debounced search (300ms), loading indicator, clear button
+- SearchResults.tsx: Category + product results, empty state, skeleton loading
+
+Barrel exports created for each feature (index.ts).
+Page.tsx updated to use new store-integrated Header, Footer, CartSlideOut, MobileNav.
+Lint passes cleanly. Dev server running successfully.

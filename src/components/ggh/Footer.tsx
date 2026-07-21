@@ -1,19 +1,23 @@
 'use client';
 
 import { Phone, Mail, Facebook, Instagram, Twitter } from 'lucide-react';
+import { useLangStore } from '@/stores/lang-store';
+import { t } from '@/lib/ggh/i18n';
 
-interface FooterProps {
-  lang: 'en' | 'ar';
-  t: Record<string, string>;
-}
+export default function Footer() {
+  const { lang, isRTL } = useLangStore();
 
-export default function Footer({ lang, t }: FooterProps) {
-  const isRTL = lang === 'ar';
+  const quickLinks = [
+    { href: '#', label: t(lang, 'aboutUs') },
+    { href: '#', label: t(lang, 'deliveryPolicy') },
+    { href: '#', label: t(lang, 'refundPolicy') },
+    { href: '#', label: t(lang, 'contactUs') },
+  ];
 
   return (
     <footer
       id="footer"
-      className="py-10 sm:py-12 px-4"
+      className="py-10 sm:py-12 px-4 mt-auto"
       style={{ backgroundColor: '#1B5E20' }}
     >
       <div className="max-w-7xl mx-auto">
@@ -28,7 +32,7 @@ export default function Footer({ lang, t }: FooterProps) {
               </span>
             </div>
             <p className="text-sm text-green-200 leading-relaxed max-w-xs">
-              {t.slogan}
+              {t(lang, 'slogan')}
             </p>
           </div>
 
@@ -38,43 +42,34 @@ export default function Footer({ lang, t }: FooterProps) {
               {isRTL ? 'روابط سريعة' : 'Quick Links'}
             </h3>
             <div className="flex flex-col gap-2">
-              <a
-                href="#"
-                className="text-sm text-green-200 hover:text-white transition-colors"
-              >
-                {t.aboutUs}
-              </a>
-              <a
-                href="#"
-                className="text-sm text-green-200 hover:text-white transition-colors"
-              >
-                {t.deliveryPolicy}
-              </a>
-              <a
-                href="#"
-                className="text-sm text-green-200 hover:text-white transition-colors"
-              >
-                {t.refundPolicy}
-              </a>
+              {quickLinks.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="text-sm text-green-200 hover:text-white transition-colors min-h-[32px] flex items-center"
+                >
+                  {link.label}
+                </a>
+              ))}
             </div>
           </div>
 
           {/* Contact */}
           <div>
             <h3 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider">
-              {t.contactUs}
+              {t(lang, 'contactUs')}
             </h3>
             <div className="flex flex-col gap-2">
               <a
                 href="tel:+201000000000"
-                className="flex items-center gap-2 text-sm text-green-200 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-sm text-green-200 hover:text-white transition-colors min-h-[32px]"
               >
                 <Phone className="size-3.5" />
-                <span>+20 100 000 0000</span>
+                <span dir="ltr">+20 100 000 0000</span>
               </a>
               <a
                 href="mailto:info@ggh.com"
-                className="flex items-center gap-2 text-sm text-green-200 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-sm text-green-200 hover:text-white transition-colors min-h-[32px]"
               >
                 <Mail className="size-3.5" />
                 <span>info@ggh.com</span>
@@ -85,30 +80,23 @@ export default function Footer({ lang, t }: FooterProps) {
           {/* Social */}
           <div>
             <h3 className="text-sm font-semibold text-white mb-3 uppercase tracking-wider">
-              {t.followUs}
+              {t(lang, 'followUs')}
             </h3>
             <div className="flex gap-3">
-              <a
-                href="#"
-                aria-label="Facebook"
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                <Facebook className="size-4 text-white" />
-              </a>
-              <a
-                href="#"
-                aria-label="Instagram"
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                <Instagram className="size-4 text-white" />
-              </a>
-              <a
-                href="#"
-                aria-label="Twitter"
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                <Twitter className="size-4 text-white" />
-              </a>
+              {[
+                { Icon: Facebook, label: 'Facebook' },
+                { Icon: Instagram, label: 'Instagram' },
+                { Icon: Twitter, label: 'Twitter' },
+              ].map(({ Icon, label }) => (
+                <a
+                  key={label}
+                  href="#"
+                  aria-label={label}
+                  className="w-12 h-12 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
+                >
+                  <Icon className="size-5 text-white" />
+                </a>
+              ))}
             </div>
           </div>
         </div>
@@ -119,7 +107,7 @@ export default function Footer({ lang, t }: FooterProps) {
         {/* Copyright */}
         <div className="text-center">
           <p className="text-sm text-green-200">
-            © 2025 GGH Gomla Go Home. {t.allRightsReserved}.
+            © 2025 GGH Gomla Go Home. {t(lang, 'allRightsReserved')}.
           </p>
         </div>
       </div>

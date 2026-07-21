@@ -1,0 +1,1555 @@
+     1→# 03 — Folder Structure
+     2→
+     3→> **GGH — Gomla Go Home** — Complete project structure, folder responsibilities, and file organization conventions.
+     4→
+     5→---
+     6→
+     7→## Table of Contents
+     8→
+     9→1. [Structure Philosophy](#1-structure-philosophy)
+    10→2. [Repository Layout](#2-repository-layout)
+    11→3. [frontend/ — Next.js Application](#3-frontend--nextjs-application)
+    12→4. [frontend/src/app/ — Routing & Pages](#4-frontendsrcapp--routing--pages)
+    13→5. [frontend/src/components/ — UI Components](#5-frontendsrccomponents--ui-components)
+    14→6. [frontend/src/features/ — Domain Modules](#6-frontendsrcfeatures--domain-modules)
+    15→7. [frontend/src/hooks/ — Custom React Hooks](#7-frontendsrchooks--custom-react-hooks)
+    16→8. [frontend/src/lib/ — Core Libraries & Clients](#8-frontendsrclib--core-libraries--clients)
+    17→9. [frontend/src/services/ — API Service Layer](#9-frontendsrcservices--api-service-layer)
+    18→10. [frontend/src/types/ — TypeScript Definitions](#10-frontendsrctypes--typescript-definitions)
+    19→11. [frontend/src/styles/ — Global Styles & Tokens](#11-frontendsrcstyles--global-styles--tokens)
+    20→12. [frontend/src/public/ — Static Assets](#12-frontendsrcpublic--static-assets)
+    21→13. [frontend/src/locales/ — Translations](#13-frontendsrclocales--translations)
+    22→14. [frontend/src/providers/ — Context Providers](#14-frontendsrcproviders--context-providers)
+    23→15. [frontend/src/utils/ — Pure Utility Functions](#15-frontendsrcutils--pure-utility-functions)
+    24→16. [backend/ — Medusa v2 & Worker](#16-backend--medusa-v2--worker)
+    25→17. [plugins/ — Custom Medusa Modules](#17-plugins--custom-medusa-modules)
+    26→18. [docker/ — Containerization](#18-docker--containerization)
+    27→19. [docs/ — Documentation](#19-docs--documentation)
+    28→20. [scripts/ — Automation & Tooling](#20-scripts--automation--tooling)
+    29→21. [File Naming Conventions](#21-file-naming-conventions)
+    30→22. [Import Rules & Boundaries](#22-import-rules--boundaries)
+    31→23. [Adding a New Feature — Checklist](#23-adding-a-new-feature--checklist)
+    32→
+    33→---
+    34→
+    35→## 1. Structure Philosophy
+    36→
+    37→Before listing folders, the principles that govern where files go:
+    38→
+    39→| Principle | Rule | Why |
+    40→|---|---|---|
+    41→| **Feature locality** | Files that change together live together. A product card component, its hooks, and its types belong in the same feature directory, not scattered across three top-level folders. | Reduces cognitive load. When you fix a bug in "product card," you open one folder, not five. |
+    42→| **Dependency direction** | Dependencies flow inward. `features/` depends on `components/` and `lib/`. `components/` depends on `lib/` and `types/`. `lib/` depends on nothing internal. `utils/` depends on nothing at all. | Prevents circular dependencies. Makes the dependency graph a tree, not a web. |
+    43→| **No orphan files** | Every file has a home. If you cannot decide where a file belongs, the folder structure is wrong — fix the structure, not the file. | Prevents `misc/`, `shared/`, and `common/` from becoming junk drawers. |
+    44→| **Elder-friendly for developers too** | A new developer should find any file within 10 seconds by following the folder naming convention. No hidden files. No clever aliases. | If Om Ibrahim needs clear navigation, so does the junior developer joining the team. |
+    45→| **RTL-first organization** | Localization files are first-class citizens, not an afterthought in a `lang/` folder at the bottom. The `locales/` directory sits at the same level as `components/` and `features/`. | Arabic is the primary language. The folder structure must reflect this priority. |
+    46→
+    47→### Dependency Graph
+    48→
+    49→```
+    50→utils/          ← Pure functions. Zero dependencies on anything internal.
+    51→  │
+    52→  ▼
+    53→types/          ← Type definitions. May import from utils/ for branded types.
+    54→  │
+    55→  ▼
+    56→lib/            ← Core libraries, clients, configurations. Imports types/, utils/.
+    57→  │
+    58→  ▼
+    59→styles/         ← Design tokens, global CSS. No imports from features/ or components/.
+    60→  │
+    61→  ▼
+    62→locales/        ← Translation files. No code imports. Consumed by next-intl at build time.
+    63→  │
+    64→  ▼
+    65→components/     ← Reusable UI primitives. Imports lib/, types/, utils/. Never imports features/.
+    66→  │
+    67→  ▼
+    68→services/       ← API call functions. Imports lib/, types/. Never imports components/ or features/.
+    69→  │
+    70→  ▼
+    71→hooks/          ← Shared React hooks. Imports lib/, services/, types/. Never imports features/.
+    72→  │
+    73→  ▼
+    74→providers/      ← Context wrappers. Imports hooks/, lib/, types/.
+    75→  │
+    76→  ▼
+    77→features/       ← Domain modules. Imports everything above. Nothing imports from features/.
+    78→  │
+    79→  ▼
+    80→app/            ← Next.js routing. Imports features/, components/, providers/. The top of the tree.
+    81→```
+    82→
+    83→---
+    84→
+    85→## 2. Repository Layout
+    86→
+    87→```
+    88→ggh-platform/
+    89→│
+    90→├── frontend/                 # Next.js 15 web application
+    91→├── backend/                  # Medusa v2 project + BullMQ worker
+    92→├── plugins/                  # Custom Medusa modules (wholesale, delivery zones, etc.)
+    93→├── docker/                   # Dockerfiles and compose configurations
+    94→├── docs/                     # Project documentation (the files you are reading now)
+    95→├── scripts/                  # Automation scripts (seed, sync, deploy)
+    96→│
+    97→├── turbo.json                # Turborepo pipeline configuration
+    98→├── package.json              # Workspace root with bun workspaces
+    99→├── .env.example              # Template for environment variables
+   100→├── .gitignore
+   101→├── .eslintrc.js              # Shared ESLint config
+   102→├── .prettierrc               # Shared Prettier config
+   103→└── README.md
+   104→```
+   105→
+   106→### Top-Level Folder Summary
+   107→
+   108→| Folder | Purpose | Who Touches It |
+   109→|---|---|---|
+   110→| `frontend/` | The entire Next.js application: pages, components, API routes, translations, styles | Frontend engineers |
+   111→| `backend/` | Medusa v2 configuration, database migrations, and the BullMQ worker process | Backend engineers |
+   112→| `plugins/` | Custom Medusa modules that extend commerce logic (wholesale pricing, delivery zones) | Backend engineers |
+   113→| `docker/` | Container definitions and orchestration configs for all services | DevOps / all engineers |
+   114→| `docs/` | Architecture, guides, runbooks, API documentation | All engineers |
+   115→| `scripts/` | One-off and recurring automation: database seeding, ERP initial sync, deployment helpers | DevOps / backend engineers |
+   116→
+   117→---
+   118→
+   119→## 3. frontend/ — Next.js Application
+   120→
+   121→```
+   122→frontend/
+   123→├── src/
+   124→│   ├── app/                  # Next.js App Router — routes, layouts, API handlers
+   125→│   ├── components/           # Reusable UI components (design system)
+   126→│   ├── features/             # Domain-specific modules (product, cart, checkout, etc.)
+   127→│   ├── hooks/                # Shared custom React hooks
+   128→│   ├── lib/                  # Core libraries, API clients, configurations
+   129→│   ├── services/             # API service functions (one per backend resource)
+   130→│   ├── types/                # Shared TypeScript type definitions
+   131→│   ├── styles/               # Global CSS, design tokens, Tailwind config
+   132→│   ├── public/               # Static assets served at root
+   133→│   ├── locales/              # Translation files (en.json, ar.json)
+   134→│   ├── providers/            # React context providers
+   135→│   └── utils/                # Pure utility functions (no side effects)
+   136→│
+   137→├── next.config.ts
+   138→├── tailwind.config.ts
+   139→├── tsconfig.json
+   140→├── postcss.config.js
+   141→├── package.json
+   142→└── .env.example
+   143→```
+   144→
+   145→---
+   146→
+   147→## 4. frontend/src/app/ — Routing & Pages
+   148→
+   149→### Purpose
+   150→
+   151→The `app/` directory is the Next.js App Router. It defines every URL the user can visit, every API endpoint the frontend exposes, and the layout hierarchy that wraps them. This folder maps directly to the browser's address bar.
+   152→
+   153→### What Belongs Here
+   154→
+   155→| Subdirectory | Contents |
+   156→|---|---|
+   157→| Route groups `(shop)/`, `(auth)/`, `(account)/` | Page components, layouts, loading states, error boundaries |
+   158→| `api/` | Route handlers (BFF endpoints) |
+   159→| `layout.tsx` | Root layout with providers, fonts, and HTML attributes (`dir`, `lang`) |
+   160→| `globals.css` | Tailwind directives and CSS custom properties |
+   161→| `not-found.tsx` | Custom 404 page |
+   162→| `error.tsx` | Global error boundary |
+   163→| `loading.tsx` | Global loading skeleton |
+   164→
+   165→### What Should NOT Be Here
+   166→
+   167→| Anti-pattern | Why |
+   168→|---|---|
+   169→| Business logic | Pages import from `features/` and delegate. They do not contain logic themselves. |
+   170→| Direct API calls to Medusa or ERPNext | All backend calls go through `services/`. Pages never import `lib/medusa.ts` directly. |
+   171→| Complex components | Pages compose feature modules. If a page file exceeds 80 lines, extract a feature component. |
+   172→| State management | State lives in `features/` or `hooks/`. Pages read state, they do not define it. |
+   173→
+   174→### Full Structure
+   175→
+   176→```
+   177→app/
+   178→├── (shop)/                           # Public storefront route group
+   179→│   ├── layout.tsx                    # Shop layout: header + footer + nav
+   180→│   ├── page.tsx                      # Homepage: hero, categories, deals
+   181→│   ├── categories/
+   182→│   │   └── [slug]/
+   183→│   │       ├── page.tsx              # Category listing page
+   184→│   │       └── loading.tsx           # Category skeleton
+   185→│   ├── products/
+   186→│   │   └── [handle]/
+   187→│   │       ├── page.tsx              # Product detail page
+   188→│   │       └── loading.tsx
+   189→│   ├── search/
+   190→│   │   ├── page.tsx                  # Search results page
+   191→│   │   └── loading.tsx
+   192→│   ├── cart/
+   193→│   │   └── page.tsx                  # Cart page
+   194→│   ├── checkout/
+   195→│   │   ├── page.tsx                  # Checkout flow (multi-step)
+   196→│   │   └── success/
+   197→│   │       └── page.tsx              # Order confirmation
+   198→│   └── deals/
+   199→│       └── page.tsx                  # All active deals
+   200→│
+   201→├── (auth)/                           # Authentication route group
+   202→│   ├── layout.tsx                    # Minimal layout: no header/footer
+   203→│   ├── login/
+   204→│   │   └── page.tsx
+   205→│   ├── register/
+   206→│   │   └── page.tsx
+   207→│   └── verify/
+   208→│       └── page.tsx                  # Email/phone verification
+   209→│
+   210→├── (account)/                        # Authenticated customer area
+   211→│   ├── layout.tsx                    # Account layout: sidebar navigation
+   212→│   ├── page.tsx                      # Account dashboard
+   213→│   ├── orders/
+   214→│   │   ├── page.tsx                  # Order history
+   215→│   │   └── [id]/
+   216→│   │       └── page.tsx              # Order detail
+   217→│   ├── addresses/
+   218→│   │   └── page.tsx                  # Saved addresses
+   219→│   ├── templates/                    # B2B order templates
+   220→│   │   └── page.tsx
+   221→│   └── settings/
+   222→│       └── page.tsx                  # Notification preferences, language
+   223→│
+   224→├── api/                              # BFF API route handlers
+   225→│   ├── auth/
+   226→│   │   ├── login/route.ts
+   227→│   │   ├── register/route.ts
+   228→│   │   ├── logout/route.ts
+   229→│   │   └── session/route.ts
+   230→│   ├── cart/
+   231→│   │   ├── route.ts                  # GET cart
+   232→│   │   ├── items/route.ts            # POST add item
+   233→│   │   └── items/[id]/route.ts       # PATCH qty / DELETE item
+   234→│   ├── products/
+   235→│   │   ├── route.ts                  # GET list
+   236→│   │   └── [handle]/route.ts         # GET detail
+   237→│   ├── categories/
+   238→│   │   ├── route.ts                  # GET list
+   239→│   │   └── [slug]/route.ts           # GET category with products
+   240→│   ├── orders/
+   241→│   │   ├── route.ts                  # GET list
+   242→│   │   └── [id]/route.ts             # GET detail
+   243→│   ├── checkout/
+   244→│   │   ├── route.ts                  # POST initiate
+   245→│   │   └── complete/route.ts         # POST confirm
+   246→│   └── webhooks/
+   247→│       ├── medusa/route.ts           # POST Medusa event notifications
+   248→│       └── erpnext/route.ts          # POST ERPNext push notifications
+   249→│
+   250→├── layout.tsx                        # Root layout: <html dir={} lang={}>, providers, fonts
+   251→├── globals.css                       # Tailwind @tailwind directives + CSS custom properties
+   252→├── not-found.tsx                     # 404 page
+   253→├── error.tsx                         # Global error boundary
+   254→└── loading.tsx                       # Global loading skeleton
+   255→```
+   256→
+   257→### Best Practices
+   258→
+   259→| Practice | Detail |
+   260→|---|---|
+   261→| **One concern per route** | `page.tsx` files compose features. They import from `features/`, pass props, and handle metadata. No business logic. |
+   262→| **Server Components by default** | Every page is a Server Component unless it needs interactivity. Mark `'use client'` only when required. |
+   263→| **Loading states for every route** | Every route that fetches data has a `loading.tsx` sibling with a skeleton matching the final layout shape. No blank screens. |
+   264→| **RTL in the root layout** | `layout.tsx` reads locale from the session and sets `<html dir="rtl" lang="ar">` or `<html dir="ltr" lang="en">`. This is set once, at the root, never overridden. |
+   265→| **API routes are thin** | An API route validates input (Zod), calls a service function, and returns a response. Maximum 30 lines. If it grows, move logic to `services/`. |
+   266→
+   267→---
+   268→
+   269→## 5. frontend/src/components/ — UI Components
+   270→
+   271→### Purpose
+   272→
+   273→The `components/` directory holds the **design system**: reusable, domain-agnostic UI primitives. These components know nothing about products, carts, or orders. They know about buttons, cards, inputs, and modals.
+   274→
+   275→### What Belongs Here
+   276→
+   277→- shadcn/ui components (installed and customized)
+   278→- Custom wrappers around shadcn/ui with GGH-specific styling
+   279→- Layout primitives (Container, Section, Grid)
+   280→- Shared structural components (Header, Footer, Navigation)
+   281→- Accessible form controls with RTL support built in
+   282→
+   283→### What Should NOT Be Here
+   284→
+   285→| Anti-pattern | Where It Belongs Instead |
+   286→|---|---|
+   287→| Components that display product data | `features/product/components/` |
+   288→| Components that read from cart state | `features/cart/components/` |
+   289→| Components that call APIs | `features/*/components/` or `services/` |
+   290→| Page-specific layouts | `app/(group)/layout.tsx` |
+   291→| One-off components used in a single feature | That feature's `components/` folder |
+   292→
+   293→### Structure
+   294→
+   295→```
+   296→components/
+   297→├── ui/                               # shadcn/ui primitives (auto-generated)
+   298→│   ├── button.tsx
+   299→│   ├── card.tsx
+   300→│   ├── input.tsx
+   301→│   ├── select.tsx
+   302→│   ├── sheet.tsx                     # Slide-out panel (used for cart)
+   303→│   ├── dialog.tsx
+   304→│   ├── badge.tsx
+   305→│   ├── separator.tsx
+   306→│   ├── skeleton.tsx
+   307→│   ├── toast.tsx
+   308→│   ├── dropdown-menu.tsx
+   309→│   ├── accordion.tsx
+   310→│   ├── tabs.tsx
+   311→│   ├── checkbox.tsx
+   312→│   ├── radio-group.tsx
+   313→│   ├── stepper.tsx                   # Custom: quantity stepper with +/−
+   314→│   └── countdown.tsx                 # Custom: deal countdown timer
+   315→│
+   316→├── layout/                           # Structural layout components
+   317→│   ├── container.tsx                 # Max-width centered wrapper
+   318→│   ├── section.tsx                   # Page section with heading + optional "View All"
+   319→│   ├── grid.tsx                      # Responsive product grid
+   320→│   └── scroll-row.tsx                # Horizontal scroll container (categories, deals)
+   321→│
+   322→├── navigation/                       # Navigation components
+   323→│   ├── header.tsx                    # Main header: logo, search, locale toggle, cart
+   324→│   ├── footer.tsx                    # Footer: links, contact, social
+   325→│   ├── mobile-nav.tsx                # Mobile bottom navigation bar
+   326→│   ├── category-nav.tsx              # Category horizontal scroll nav
+   327→│   └── breadcrumbs.tsx               # RTL-aware breadcrumb trail
+   328→│
+   329→├── feedback/                         # User feedback components
+   330→│   ├── loading-spinner.tsx           # Inline loading indicator
+   331→│   ├── empty-state.tsx               # "No items yet" with illustration + CTA
+   332→│   ├── error-state.tsx               # "Something went wrong" with retry button
+   333→│   ├── savings-badge.tsx             # "Save X EGP" / "وفّر X ج.م" badge
+   334→│   └── price-display.tsx             # Today/yesterday price with savings calc
+   335→│
+   336→└── index.ts                          # Barrel export for all components
+   337→```
+   338→
+   339→### Best Practices
+   340→
+   341→| Practice | Detail |
+   342→|---|---|
+   343→| **No business logic** | A `ProductCard` does not live here. A `Card` does. The difference: `Card` accepts `title`, `image`, `price` as props. It does not know they come from a product. |
+   344→| **RTL built in** | Every component that renders directionally (stepper, price display, badge with icon) uses `rtl:` Tailwind variants. Never `ml-` or `mr-` — use `ms-` and `me-` (logical properties). |
+   345→| **Touch targets** | Every interactive element meets the 48px minimum. If a shadcn/ui component falls short, wrap it in a `TouchTarget` component that adds padding. |
+   346→| **Controlled + accessible** | Every form control accepts `aria-label` in both languages. Every button has a visible text label (no icon-only buttons except in the header, where `aria-label` is mandatory). |
+   347→
+   348→---
+   349→
+   350→## 6. frontend/src/features/ — Domain Modules
+   351→
+   352→### Purpose
+   353→
+   354→The `features/` directory is the heart of the application. Each subfolder is a **domain module** that groups everything related to one business capability: components, hooks, types, utils, and constants. Features are self-contained and do not import from each other.
+   355→
+   356→### What Belongs Here
+   357→
+   358→Everything specific to a business domain: product display, cart management, checkout flow, order history, deal management, customer account, search, and wholesale operations.
+   359→
+   360→### What Should NOT Be Here
+   361→
+   362→| Anti-pattern | Where It Belongs Instead |
+   363→|---|---|
+   364→| Generic UI components (buttons, cards) | `components/ui/` |
+   365→| Shared hooks used across features | `hooks/` |
+   366→| API client configuration | `lib/` |
+   367→| Pure utility functions (formatEGP, formatDate) | `utils/` |
+   368→| Cross-cutting types (User, Locale) | `types/` |
+   369→
+   370→### Structure
+   371→
+   372→```
+   373→features/
+   374→├── product/
+   375→│   ├── components/
+   376→│   │   ├── product-card.tsx           # Card with image, name, weight, price, add button
+   377→│   │   ├── product-detail.tsx         # Full product page content
+   378→│   │   ├── product-gallery.tsx        # Image gallery with zoom
+   379→│   │   ├── variant-selector.tsx       # Pack size picker (500g / 1kg / 5kg / 25kg)
+   380→│   │   ├── price-tier-display.tsx     # Shows pricing tiers: "Buy 5+ save 10%"
+   381→│   │   ├── bulk-quantity-input.tsx    # Large stepper for wholesale quantities
+   382→│   │   └── savings-calculator.tsx     # "You save X EGP vs. retail" display
+   383→│   ├── hooks/
+   384→│   │   ├── use-product.ts            # Fetch single product
+   385→│   │   └── use-products-by-category.ts
+   386→│   ├── types/
+   387→│   │   └── product.types.ts          # Product, Variant, PriceTier
+   388→│   └── utils/
+   389→│       ├── calculate-price-tier.ts    # Determine which pricing tier applies
+   390→│       └── format-product-variant.ts  # Transform Medusa product → display model
+   391→│
+   392→├── category/
+   393→│   ├── components/
+   394→│   │   ├── category-grid.tsx          # Homepage category circle grid
+   395→│   │   ├── category-hero.tsx          # Category page header
+   396→│   │   └── category-product-list.tsx  # Paginated product list for a category
+   397→│   ├── hooks/
+   398→│   │   ├── use-categories.ts
+   399→│   │   └── use-category-by-slug.ts
+   400→│   └── types/
+   401→│       └── category.types.ts
+   402→│
+   403→├── cart/
+   404→│   ├── components/
+   405→│   │   ├── cart-slide-out.tsx         # Sheet-based cart panel
+   406→│   │   ├── cart-item.tsx              # Single line item with qty controls
+   407→│   │   ├── cart-summary.tsx           # Subtotal, savings, delivery, total
+   408→│   │   ├── cart-empty.tsx             # Empty cart state
+   409→│   │   └── minimum-order-notice.tsx   # "Add X more EGP to reach minimum"
+   410→│   ├── hooks/
+   411→│   │   ├── use-cart.ts               # Cart CRUD operations
+   412→│   │   └── use-cart-summary.ts       # Calculated totals, savings, tier status
+   413→│   ├── store/
+   414→│   │   └── cart-store.ts             # Zustand store for optimistic UI updates
+   415→│   └── types/
+   416→│       └── cart.types.ts
+   417→│
+   418→├── checkout/
+   419→│   ├── components/
+   420→│   │   ├── checkout-flow.tsx          # Multi-step checkout orchestrator
+   421→│   │   ├── delivery-slot-picker.tsx   # Date + time window selection
+   422→│   │   ├── address-form.tsx           # Delivery address form (RTL-aware)
+   423→│   │   ├── payment-method-select.tsx  # COD / digital payment choice
+   424→│   │   ├── order-review.tsx          # Final review before confirming
+   425→│   │   └── order-confirmation.tsx     # Success page with order details
+   426→│   ├── hooks/
+   427→│   │   ├── use-checkout.ts
+   428→│   │   └── use-delivery-slots.ts
+   429→│   ├── utils/
+   430→│   │   └── validate-checkout.ts       # MOQ, delivery zone, slot availability
+   431→│   └── types/
+   432→│       └── checkout.types.ts
+   433→│
+   434→├── order/
+   435→│   ├── components/
+   436→│   │   ├── order-history-list.tsx     # Paginated order list
+   437→│   │   ├── order-detail.tsx           # Full order with line items + tracking
+   438→│   │   ├── order-status-bar.tsx       # Visual status: confirmed→picked→shipped→delivered
+   439→│   │   ├── reorder-button.tsx         # One-tap reorder entire order
+   440→│   │   └── weight-verification.tsx    # Display driver weight photo
+   441→│   ├── hooks/
+   442→│   │   ├── use-orders.ts
+   443→│   │   └── use-order-detail.ts
+   444→│   └── types/
+   445→│       └── order.types.ts
+   446→│
+   447→├── deal/
+   448→│   ├── components/
+   449→│   │   ├── hot-deals-carousel.tsx     # Homepage deals section
+   450→│   │   ├── deal-card.tsx              # Single deal with countdown + savings
+   451→│   │   └── countdown-timer.tsx        # HH:MM:SS countdown (not auto-advancing)
+   452→│   ├── hooks/
+   453→│   │   └── use-deals.ts
+   454→│   └── types/
+   455→│       └── deal.types.ts
+   456→│
+   457→├── search/
+   458→│   ├── components/
+   459→│   │   ├── search-bar.tsx             # Header search with Arabic/English input
+   460→│   │   ├── search-results.tsx         # Results page
+   461→│   │   └── search-suggestions.tsx     # Typeahead dropdown
+   462→│   ├── hooks/
+   463→│   │   └── use-search.ts
+   464→│   └── utils/
+   465→│       └── normalize-arabic.ts        # Normalize أ/إ/آ → ا for search
+   466→│
+   467→├── auth/
+   468→│   ├── components/
+   469→│   │   ├── login-form.tsx
+   470→│   │   ├── register-form.tsx
+   471→│   │   └── wholesale-application.tsx  # Business document upload form
+   472→│   ├── hooks/
+   473→│   │   ├── use-auth.ts
+   474→│   │   └── use-session.ts
+   475→│   └── types/
+   476→│       └── auth.types.ts
+   477→│
+   478→└── wholesale/                         # B2B-specific features
+   479→    ├── components/
+   480→    │   ├── order-template-list.tsx     # Saved order templates
+   481→    │   ├── order-template-card.tsx     # Single template with "Reorder" button
+   482→    │   ├── bulk-upload.tsx             # CSV/spreadsheet order upload
+   483→    │   └── credit-status.tsx           # Net-30 terms status display
+   484→    ├── hooks/
+   485→    │   ├── use-templates.ts
+   486→    │   └── use-credit.ts
+   487→    └── types/
+   488→        └── wholesale.types.ts
+   489→```
+   490→
+   491→### Feature Isolation Rules
+   492→
+   493→| Rule | Enforcement |
+   494→|---|---|
+   495→| **No cross-feature imports** | `features/product/` never imports from `features/cart/`. If product-card needs to add to cart, it calls `useCart().addItem()` from the shared `hooks/` layer, or receives an `onAddToCart` callback. |
+   496→| **Every feature is a leaf** | Features are consumed by `app/` pages. Nothing depends on features except pages and layouts. |
+   497→| **Shared state via hooks** | Cart state lives in `features/cart/store/`. Any feature that needs cart data imports `use-cart.ts` from `features/cart/hooks/`. This is the one exception to cross-feature imports: cart hooks are the public API of the cart feature. |
+   498→| **Feature types are local** | `features/product/types/product.types.ts` defines the Product type used within that feature. If the type is needed globally, it moves to `types/`. |
+   499→
+   500→---
+   501→
+   502→## 7. frontend/src/hooks/ — Custom React Hooks
+   503→
+   504→### Purpose
+   505→
+   506→Shared React hooks that are **not specific to one feature**. Feature-specific hooks live inside their `features/*/hooks/` directory. Only hooks used by two or more features belong here.
+   507→
+   508→### What Belongs Here
+   509→
+   510→| Hook | Purpose |
+   511→|---|---|
+   512→| `use-locale.ts` | Current locale, direction (RTL/LTR), and locale toggle function |
+   513→| `use-debounce.ts` | Debounce a value (search input, resize events) |
+   514→| `use-media-query.ts` | Responsive breakpoint detection |
+   515→| `use-intersection.ts` | Intersection Observer for lazy loading and infinite scroll |
+   516→| `use-keyboard.ts` | Keyboard shortcut handler for accessibility |
+   517→| `use-click-outside.ts` | Detect clicks outside an element (close dropdowns) |
+   518→| `use-local-storage.ts` | Persist state in localStorage with type safety |
+   519→| `use-async.ts` | Generic async state handler (loading, error, data) |
+   520→
+   521→### What Should NOT Be Here
+   522→
+   523→| Anti-pattern | Where It Belongs |
+   524→|---|---|
+   525→| `use-cart.ts` | `features/cart/hooks/` (domain-specific) |
+   526→| `use-products.ts` | `features/product/hooks/` (domain-specific) |
+   527→| `useSWR` or `useQuery` wrappers | `lib/` (configuration, not hooks) |
+   528→| Non-React functions | `utils/` |
+   529→
+   530→### Example File
+   531→
+   532→```typescript
+   533→// hooks/use-locale.ts
+   534→import { useSearchParams } from 'next/navigation';
+   535→import { useCallback } from 'react';
+   536→
+   537→type Locale = 'en' | 'ar';
+   538→type Direction = 'ltr' | 'rtl';
+   539→
+   540→export function useLocale() {
+   541→  const searchParams = useSearchParams();
+   542→  const locale: Locale = (searchParams.get('lang') as Locale) ?? 'ar';
+   543→  const direction: Direction = locale === 'ar' ? 'rtl' : 'ltr';
+   544→
+   545→  const toggleLocale = useCallback(() => {
+   546→    const newLocale = locale === 'ar' ? 'en' : 'ar';
+   547→    // Set cookie and trigger navigation
+   548→    document.cookie = `ggh_locale=${newLocale};path=/;max-age=${60 * 60 * 24 * 365}`;
+   549→    window.location.reload();
+   550→  }, [locale]);
+   551→
+   552→  return { locale, direction, toggleLocale } as const;
+   553→}
+   554→```
+   555→
+   556→---
+   557→
+   558→## 8. frontend/src/lib/ — Core Libraries & Clients
+   559→
+   560→### Purpose
+   561→
+   562→Configuration objects, API client instances, and initialization code. This is the "wiring" layer — it creates and configures the tools that `services/` and `hooks/` use. No business logic lives here.
+   563→
+   564→### What Belongs Here
+   565→
+   566→| File | Purpose |
+   567→|---|---|
+   568→| `medusa.ts` | Medusa JS SDK client instance (Store API + Admin API) |
+   569→| `erp.ts` | ERPNext REST client instance |
+   570→| `redis.ts` | Redis client instance (for server-side caching) |
+   571→| `i18n.ts` | next-intl configuration, locale detection logic |
+   572→| `validators.ts` | Zod schema registry for API input validation |
+   573→| `constants.ts` | Application-wide constants (MOQ values, delivery zones, etc.) |
+   574→| `analytics.ts` | Analytics event tracking setup |
+   575→| `error-tracking.ts` | Sentry or error tracking initialization |
+   576→
+   577→### What Should NOT Be Here
+   578→
+   579→| Anti-pattern | Where It Belongs |
+   580→|---|---|
+   581→| Business logic (price calculation) | `features/*/utils/` or `utils/` |
+   582→| API call functions (getProducts) | `services/` |
+   583→| React hooks | `hooks/` |
+   584→| UI components | `components/` |
+   585→
+   586→### Structure
+   587→
+   588→```
+   589→lib/
+   590→├── medusa.ts                # Medusa SDK client with auth headers
+   591→├── erp.ts                   # ERPNext REST client
+   592→├── redis.ts                 # ioredis client (server-side only)
+   593→├── i18n.ts                  # Locale config: supported locales, default locale, detection
+   594→├── validators.ts            # Zod schemas: loginSchema, registerSchema, checkoutSchema, etc.
+   595→├── constants.ts             # MIN_ORDER_B2C, MIN_ORDER_B2B, DELIVERY_ZONES, etc.
+   596→├── analytics.ts             # Event tracking: trackAddToCart, trackPurchase, etc.
+   597→├── error-tracking.ts        # Sentry init with DSN from env
+   598→└── config.ts                # Feature flags, environment detection (isDev, isProd)
+   599→```
+   600→
+   601→### Example File
+   602→
+   603→```typescript
+   604→// lib/medusa.ts
+   605→import Medusa from '@medusajs/js-sdk';
+   606→
+   607→const BACKEND_URL = process.env.MEDUSA_URL ?? 'http://localhost:9000';
+   608→const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY ?? '';
+   609→
+   610→export const medusa = new Medusa({
+   611→  baseUrl: BACKEND_URL,
+   612→  publishableKey: PUBLISHABLE_KEY,
+   613→});
+   614→
+   615→// Server-side admin client (used in API routes only)
+   616→export const medusaAdmin = new Medusa({
+   617→  baseUrl: BACKEND_URL,
+   618→  apiKey: process.env.MEDUSA_API_KEY,
+   619→});
+   620→```
+   621→
+   622→---
+   623→
+   624→## 9. frontend/src/services/ — API Service Layer
+   625→
+   626→### Purpose
+   627→
+   628→The `services/` directory contains **one file per backend resource**. Each file exports async functions that call the BFF API routes (`/api/*`). These functions are the only way frontend code interacts with the backend. No component or hook ever calls `fetch('/api/...')` directly.
+   629→
+   630→### What Belongs Here
+   631→
+   632→| File | Functions |
+   633→|---|---|
+   634→| `product.service.ts` | `getProducts()`, `getProductByHandle()`, `getProductsByCategory()` |
+   635→| `category.service.ts` | `getCategories()`, `getCategoryBySlug()` |
+   636→| `cart.service.ts` | `getCart()`, `addToCart()`, `updateCartItem()`, `removeCartItem()` |
+   637→| `order.service.ts` | `getOrders()`, `getOrderById()`, `reorder()` |
+   638→| `auth.service.ts` | `login()`, `register()`, `logout()`, `getSession()` |
+   639→| `checkout.service.ts` | `initiateCheckout()`, `completeCheckout()` |
+   640→| `search.service.ts` | `searchProducts()` |
+   641→| `deal.service.ts` | `getActiveDeals()` |
+   642→
+   643→### What Should NOT Be Here
+   644→
+   645→| Anti-pattern | Where It Belongs |
+   646→|---|---|
+   647→| Direct Medusa or ERPNext API calls | `lib/` clients are used in API routes, not in services |
+   648→| State management | `features/*/store/` or `hooks/` |
+   649→| Component rendering logic | `features/*/components/` |
+   650→| Business logic (price calculation) | `features/*/utils/` |
+   651→
+   652→### Example File
+   653→
+   654→```typescript
+   655→// services/product.service.ts
+   656→import type { Product, ProductListResponse } from '@/types/product';
+   657→
+   658→const API_BASE = '/api/products';
+   659→
+   660→export async function getProducts(params?: {
+   661→  categoryId?: string;
+   662→  query?: string;
+   663→  page?: number;
+   664→  limit?: number;
+   665→}): Promise<ProductListResponse> {
+   666→  const searchParams = new URLSearchParams();
+   667→  if (params?.categoryId) searchParams.set('categoryId', params.categoryId);
+   668→  if (params?.query) searchParams.set('q', params.query);
+   669→  if (params?.page) searchParams.set('page', String(params.page));
+   670→  if (params?.limit) searchParams.set('limit', String(params.limit));
+   671→
+   672→  const res = await fetch(`${API_BASE}?${searchParams.toString()}`);
+   673→  if (!res.ok) throw new Error('Failed to fetch products');
+   674→  return res.json();
+   675→}
+   676→
+   677→export async function getProductByHandle(handle: string): Promise<Product> {
+   678→  const res = await fetch(`${API_BASE}/${handle}`);
+   679→  if (!res.ok) throw new Error('Failed to fetch product');
+   680→  return res.json();
+   681→}
+   682→```
+   683→
+   684→### Best Practices
+   685→
+   686→| Practice | Detail |
+   687→|---|---|
+   688→| **One file per resource** | `product.service.ts` handles all product API calls. Do not split into `product-get.service.ts` and `product-create.service.ts`. |
+   689→| **Type every function** | Every service function has a typed return value using types from `types/`. No `any`. |
+   690→| **Handle errors consistently** | Every function throws on non-2xx. The calling hook or component catches and displays the error. |
+   691→| **No caching logic** | Services are pure data fetchers. Caching is handled by TanStack Query configuration in the calling hook. |
+   692→
+   693→---
+   694→
+   695→## 10. frontend/src/types/ — TypeScript Definitions
+   696→
+   697→### Purpose
+   698→
+   699→Shared TypeScript type definitions used across multiple features, services, and components. Types specific to one feature live in that feature's `types/` folder.
+   700→
+   701→### What Belongs Here
+   702→
+   703→| File | Contents |
+   704→|---|---|
+   705→| `product.ts` | `Product`, `ProductVariant`, `PriceTier`, `ProductListResponse` |
+   706→| `cart.ts` | `Cart`, `CartItem`, `CartSummary` |
+   707→| `order.ts` | `Order`, `OrderLineItem`, `OrderStatus`, `DeliverySlot` |
+   708→| `customer.ts` | `Customer`, `Address`, `CustomerGroup` |
+   709→| `category.ts` | `Category`, `CategoryTree` |
+   710→| `deal.ts` | `Deal`, `DealStatus` |
+   711→| `api.ts` | `ApiResponse<T>`, `PaginatedResponse<T>`, `ApiError` |
+   712→| `common.ts` | `Locale`, `Direction`, `Money`, `Currency` |
+   713→| `erp.ts` | `ErpSyncStatus`, `ErpSyncLog` (used by admin features) |
+   714→
+   715→### What Should NOT Be Here
+   716→
+   717→| Anti-pattern | Where It Belongs |
+   718→|---|---|
+   719→| Types used by only one feature | That feature's local `types/` folder |
+   720→| Runtime values (constants) | `lib/constants.ts` |
+   721→| Zod schemas | `lib/validators.ts` |
+   722→| Component prop types | Co-located in the component file or `features/*/types/` |
+   723→
+   724→### Example File
+   725→
+   726→```typescript
+   727→// types/common.ts
+   728→export type Locale = 'en' | 'ar';
+   729→export type Direction = 'ltr' | 'rtl';
+   730→
+   731→/** Monetary amount stored in piastres (integer) to avoid floating-point errors */
+   732→export type Piastres = number;
+   733→
+   734→export interface Money {
+   735→  amount: Piastres;
+   736→  currency: string;
+   737→}
+   738→
+   739→export interface LocalizedText {
+   740→  en: string;
+   741→  ar: string;
+   742→}
+   743→
+   744→export interface PaginatedResponse<T> {
+   745→  data: T[];
+   746→  count: number;
+   747→  page: number;
+   748→  limit: number;
+   749→  hasMore: boolean;
+   750→}
+   751→```
+   752→
+   753→---
+   754→
+   755→## 11. frontend/src/styles/ — Global Styles & Tokens
+   756→
+   757→### Purpose
+   758→
+   759→Global CSS, design tokens (CSS custom properties), and Tailwind configuration extensions. This is where the visual identity of GGH is defined as code.
+   760→
+   761→### What Belongs Here
+   762→
+   763→| File | Contents |
+   764→|---|---|
+   765→| `globals.css` | Tailwind directives, CSS custom properties (colors, spacing, radii), font-face declarations |
+   766→| `animations.css` | Shared keyframe animations (fade-in, slide-up, pulse) |
+   767→| `rtl.css` | RTL-specific overrides that cannot be handled by Tailwind's `rtl:` variant |
+   768→
+   769→### What Should NOT Be Here
+   770→
+   771→| Anti-pattern | Where It Belongs |
+   772→|---|---|
+   773→| Component-specific styles | Co-located with the component using Tailwind classes |
+   774→| Third-party CSS (shadcn/ui) | `components/ui/` (each component imports its own styles) |
+   775→| JavaScript/TypeScript | `lib/` or `utils/` |
+   776→
+   777→### Structure
+   778→
+   779→```
+   780→styles/
+   781→├── globals.css              # Root: @tailwind directives, :root CSS variables, font-face
+   782→├── animations.css           # @keyframes for shared animations
+   783→└── rtl.css                  # RTL overrides (e.g., flip specific background gradients)
+   784→```
+   785→
+   786→### Example: Design Tokens in globals.css
+   787→
+   788→```css
+   789→@import "tailwindcss";
+   790→
+   791→:root {
+   792→  /* Primary — Deep Emerald Green */
+   793→  --color-primary-50:  #F1F8F2;
+   794→  --color-primary-100: #E8F5E9;
+   795→  --color-primary-500: #2EA043;
+   796→  --color-primary-600: #228B22;
+   797→  --color-primary-700: #1B6820;
+   798→  --color-primary-800: #145216;
+   799→  --color-primary-900: #0D3B0F;
+   800→
+   801→  /* Accent — Warm Amber */
+   802→  --color-accent-50:  #FFF8F0;
+   803→  --color-accent-100: #FFF3E0;
+   804→  --color-accent-500: #FF6D00;
+   805→  --color-accent-600: #E64A19;
+   806→  --color-accent-700: #BF360C;
+   807→
+   808→  /* Typography — Elder-Friendly Sizes */
+   809→  --font-size-body:    1rem;     /* 16px — minimum readable size */
+   810→  --font-size-price:   1.25rem;  /* 20px — prices must be prominent */
+   811→  --font-size-heading: 1.5rem;   /* 24px — section headings */
+   812→  --font-size-hero:    2rem;     /* 32px — hero titles */
+   813→
+   814→  /* Touch Targets */
+   815→  --touch-target-min:   48px;
+   816→  --touch-target-small: 44px;
+   817→
+   818→  /* Radii */
+   819→  --radius-sm: 6px;
+   820→  --radius-md: 8px;
+   821→  --radius-lg: 12px;
+   822→  --radius-xl: 16px;
+   823→}
+   824→```
+   825→
+   826→---
+   827→
+   828→## 12. frontend/src/public/ — Static Assets
+   829→
+   830→### Purpose
+   831→
+   832→Files served at the root URL path. These are not processed by Next.js's build pipeline — they are copied as-is.
+   833→
+   834→### What Belongs Here
+   835→
+   836→| File/Folder | Contents |
+   837→|---|---|
+   838→| `images/logo.svg` | GGH logo (used in `<img>` tags, not `next/image`) |
+   839→| `images/logo-ar.svg` | Arabic logo variant |
+   840→| `images/og-image.png` | Open Graph social sharing image |
+   841→| `images/empty-cart.svg` | Empty state illustration |
+   842→| `favicon.ico` | Browser tab icon |
+   843→| `manifest.json` | PWA manifest |
+   844→| `robots.txt` | Search engine crawl rules |
+   845→
+   846→### What Should NOT Be Here
+   847→
+   848→| Anti-pattern | Where It Belongs |
+   849→|---|---|
+   850→| Product images | Served from CDN (Medusa media storage or S3) |
+   851→| Large files (>100KB) | CDN or optimized via `next/image` from external URL |
+   852→| JavaScript or CSS | `src/` directory |
+   853→
+   854→---
+   855→
+   856→## 13. frontend/src/locales/ — Translations
+   857→
+   858→### Purpose
+   859→
+   860→Translation files for the bilingual (EN/AR) interface. Managed by `next-intl`. These are the single source of truth for every user-facing string in the application.
+   861→
+   862→### What Belongs Here
+   863→
+   864→| File | Contents |
+   865→|---|---|
+   866→| `en.json` | English translations, organized by namespace |
+   867→| `ar.json` | Arabic translations, matching the same namespace structure |
+   868→
+   869→### What Should NOT Be Here
+   870→
+   871→| Anti-pattern | Where It Belongs |
+   872→|---|---|
+   873→| Runtime translation logic | `lib/i18n.ts` |
+   874→| Component-specific string formatting | `utils/` (e.g., `formatEGP()`) |
+   875→| Non-string data (number formats, date formats) | `lib/i18n.ts` (ICU message format config) |
+   876→
+   877→### Structure (namespace organization)
+   878→
+   879→```json
+   880→{
+   881→  "common": {
+   882→    "brandName": "GGH — Gomla Go Home",
+   883→    "slogan": "Wholesale Groceries Delivered",
+   884→    "shopNow": "Shop Now",
+   885→    "viewAll": "View All",
+   886→    "loading": "Loading...",
+   887→    "retry": "Try Again",
+   888→    "save": "Save",
+   889→    "cancel": "Cancel",
+   890→    "delete": "Delete",
+   891→    "close": "Close",
+   892→    "back": "Back"
+   893→  },
+   894→  "nav": {
+   895→    "home": "Home",
+   896→    "categories": "Categories",
+   897→    "deals": "Hot Deals",
+   898→    "cart": "Cart",
+   899→    "account": "My Account",
+   900→    "search": "Search products...",
+   901→    "switchLang": "عربي"
+   902→  },
+   903→  "product": {
+   904→    "addToCart": "Add to Cart",
+   905→    "perUnit": "per {unit}",
+   906→    "todayPrice": "Today's Price",
+   907→    "yesterdayPrice": "Yesterday",
+   908→    "savings": "Save {amount}",
+   909→    "outOfStock": "Available Soon — Pre-order",
+   910→    "bulkPricing": "Buy {min}+ save {percent}%",
+   911→    "casePack": "Case of {count} units",
+   912→    "weight": "{value} {unit}"
+   913→  },
+   914→  "cart": {
+   915→    "title": "Your Cart",
+   916→    "empty": "Your cart is empty",
+   917→    "emptyAction": "Browse wholesale groceries",
+   918→    "subtotal": "Subtotal",
+   919→    "delivery": "Delivery",
+   920→    "savings": "You Save",
+   921→    "total": "Total",
+   922→    "minimumNotice": "Add {amount} more to reach the minimum order",
+   923→    "checkout": "Complete Order",
+   924→    "removeItem": "Remove",
+   925→    "quantity": "Quantity"
+   926→  },
+   927→  "checkout": {
+   928→    "title": "Checkout",
+   929→    "deliverySlot": "Choose Delivery Time",
+   930→    "address": "Delivery Address",
+   931→    "payment": "Payment Method",
+   932→    "cod": "Cash on Delivery",
+   933→    "digital": "Pay Online",
+   934→    "review": "Review Order",
+   935→    "confirm": "Place Order",
+   936→    "success": "Order Confirmed!",
+   937→    "orderNumber": "Order #{number}"
+   938→  },
+   939→  "order": {
+   940→    "status": {
+   941→      "confirmed": "Confirmed",
+   942→      "picked": "Being Picked",
+   943→      "shipped": "On the Way",
+   944→      "delivered": "Delivered"
+   945→    },
+   946→    "reorder": "Reorder",
+   947→    "history": "Order History"
+   948→  },
+   949→  "category": {
+   950→    "riceGrains": "Rice & Grains",
+   951→    "pastaNoodles": "Pasta & Noodles",
+   952→    "flourBaking": "Flour & Baking",
+   953→    "sugarSweeteners": "Sugar & Sweeteners",
+   954→    "oilsFats": "Oils & Fats",
+   955→    "gheeButter": "Ghee & Butter",
+   956→    "beansLentils": "Beans & Lentils",
+   957→    "teaCoffee": "Tea & Coffee",
+   958→    "spicesSeasonings": "Spices & Seasonings",
+   959→    "tomatoPasteSauces": "Tomato Paste & Sauces",
+   960→    "cannedFoods": "Canned Foods",
+   961→    "frozenFood": "Frozen Food",
+   962→    "cleaningProducts": "Cleaning Products",
+   963→    "paperProducts": "Paper Products",
+   964→    "householdEssentials": "Household Essentials"
+   965→  },
+   966→  "deal": {
+   967→    "hotDeals": "Hot Deals",
+   968→    "endsIn": "Ends in",
+   969→    "limitedOffer": "Limited Time Offer"
+   970→  },
+   971→  "auth": {
+   972→    "login": "Log In",
+   973→    "register": "Create Account",
+   974→    "email": "Email",
+   975→    "password": "Password",
+   976→    "phone": "Phone Number",
+   977→    "name": "Full Name",
+   978→    "forgotPassword": "Forgot Password?",
+   979→    "wholesaleAccount": "Apply for Wholesale Account"
+   980→  },
+   981→  "error": {
+   982→    "network": "Could not connect. Please check your internet and try again.",
+   983→    "server": "Something went wrong on our end. Please try again.",
+   984→    "validation": "Please check the information you entered.",
+   985→    "notFound": "Page not found.",
+   986→    "cartMinNotMet": "Minimum order amount not reached."
+   987→  }
+   988→}
+   989→```
+   990→
+   991→### Best Practices
+   992→
+   993→| Practice | Detail |
+   994→|---|---|
+   995→| **Arabic file is not a translation of English** | The Arabic file is written by an Arabic-speaking team member. Machine translation is forbidden for UI strings. |
+   996→| **Every key has both languages** | CI checks that `en.json` and `ar.json` have identical key sets. Missing keys fail the build. |
+   997→| **Use ICU message format** | For interpolation (`{count}`, `{amount}`), plural rules (`{count, plural, one{item} other{items}}`), and RTL-aware formatting. |
+   998→| **No hardcoded strings in components** | Every user-facing string comes from the translation file. Developer-facing strings (console.error, log messages) stay in English. |
+   999→
+  1000→---
+  1001→
+  1002→## 14. frontend/src/providers/ — Context Providers
+  1003→
+  1004→### Purpose
+  1005→
+  1006→React context providers that wrap the application at the root layout level. These are the "plumbing" that makes global state and configuration available to all components.
+  1007→
+  1008→### What Belongs Here
+  1009→
+  1010→| File | Purpose |
+  1011→|---|---|
+  1012→| `query-provider.tsx` | TanStack Query client provider (server state management) |
+  1013→| `locale-provider.tsx` | next-intl provider (translations + RTL direction) |
+  1014→| `theme-provider.tsx` | next-themes provider (light/dark mode — future) |
+  1015→| `toast-provider.tsx` | Sonner/toast notification provider |
+  1016→| `app-provider.tsx` | Composes all providers into a single wrapper |
+  1017→
+  1018→### What Should NOT Be Here
+  1019→
+  1020→| Anti-pattern | Where It Belongs |
+  1021→|---|---|
+  1022→| Business logic | `features/*/store/` |
+  1023→| Cart state (it is not global context) | `features/cart/store/cart-store.ts` (Zustand — no provider needed) |
+  1024→| API calls | `services/` |
+  1025→| Component rendering | `components/` |
+  1026→
+  1027→### Example File
+  1028→
+  1029→```typescript
+  1030→// providers/app-provider.tsx
+  1031→'use client';
+  1032→
+  1033→import { QueryProvider } from './query-provider';
+  1034→import { LocaleProvider } from './locale-provider';
+  1035→import { ToastProvider } from './toast-provider';
+  1036→import type { ReactNode } from 'react';
+  1037→
+  1038→interface AppProviderProps {
+  1039→  children: ReactNode;
+  1040→  locale: string;
+  1041→}
+  1042→
+  1043→export function AppProvider({ children, locale }: AppProviderProps) {
+  1044→  return (
+  1045→    <QueryProvider>
+  1046→      <LocaleProvider locale={locale}>
+  1047→        <ToastProvider>
+  1048→          {children}
+  1049→        </ToastProvider>
+  1050→      </LocaleProvider>
+  1051→    </QueryProvider>
+  1052→  );
+  1053→}
+  1054→```
+  1055→
+  1056→---
+  1057→
+  1058→## 15. frontend/src/utils/ — Pure Utility Functions
+  1059→
+  1060→### Purpose
+  1061→
+  1062→Pure functions with **zero side effects** and **zero external dependencies** (no React, no API calls, no DOM access). These are the most reusable and testable functions in the codebase.
+  1063→
+  1064→### What Belongs Here
+  1065→
+  1066→| File | Functions |
+  1067→|---|---|
+  1068→| `currency.ts` | `formatEGP()`, `parsePiastres()`, `calculateSavings()` |
+  1069→| `date.ts` | `formatDate()`, `formatRelativeTime()`, `getDeliveryETA()` |
+  1070→| `string.ts` | `truncate()`, `slugify()`, `normalizeArabic()` |
+  1071→| `number.ts` | `clamp()`, `roundToNearest()`, `calculatePriceTier()` |
+  1072→| `validation.ts` | `isValidEgyptianPhone()`, `isValidEmail()`, `meetsMOQ()` |
+  1073→| `object.ts` | `pick()`, `omit()`, `deepMerge()` |
+  1074→| `array.ts` | `groupBy()`, `uniqueBy()`, `paginate()` |
+  1075→
+  1076→### What Should NOT Be Here
+  1077→
+  1078→| Anti-pattern | Where It Belongs |
+  1079→|---|---|
+  1080→| React hooks | `hooks/` |
+  1081→| API calls | `services/` |
+  1082→| Functions that read from `localStorage` or `document` | `hooks/` (side effects belong in hooks, not utils) |
+  1083→| Functions that import from `lib/`, `services/`, or `features/` | Utils are leaf nodes. They import nothing internal. |
+  1084→| Business logic with domain knowledge | `features/*/utils/` |
+  1085→
+  1086→### Example File
+  1087→
+  1088→```typescript
+  1089→// utils/currency.ts
+  1090→
+  1091→/** Format piastres as Egyptian Pounds string */
+  1092→export function formatEGP(piastres: number, locale: 'en' | 'ar' = 'ar'): string {
+  1093→  const pounds = piastres / 100;
+  1094→  if (locale === 'ar') {
+  1095→    return `${pounds.toFixed(2)} ج.م`;
+  1096→  }
+  1097→  return `${pounds.toFixed(2)} EGP`;
+  1098→}
+  1099→
+  1100→/** Calculate savings between two prices (in piastres) */
+  1101→export function calculateSavings(todayPrice: number, yesterdayPrice: number): {
+  1102→  savingsAmount: number;
+  1103→  savingsPercent: number;
+  1104→} {
+  1105→  const savingsAmount = yesterdayPrice - todayPrice;
+  1106→  const savingsPercent = Math.round((savingsAmount / yesterdayPrice) * 100);
+  1107→  return { savingsAmount, savingsPercent };
+  1108→}
+  1109→
+  1110→/** Check if a quantity meets the minimum order quantity */
+  1111→export function meetsMOQ(quantity: number, moq: number): boolean {
+  1112→  return quantity >= moq;
+  1113→}
+  1114→```
+  1115→
+  1116→---
+  1117→
+  1118→## 16. backend/ — Medusa v2 & Worker
+  1119→
+  1120→### Purpose
+  1121→
+  1122→The `backend/` directory contains the Medusa v2 commerce engine, the BullMQ worker process, and the shared configuration that ties them together.
+  1123→
+  1124→### Structure
+  1125→
+  1126→```
+  1127→backend/
+  1128→├── medusa/                            # Medusa v2 project
+  1129→│   ├── src/
+  1130→│   │   ├── api/                       # Custom API routes
+  1131→│   │   │   ├── store/                 # Storefront-facing custom endpoints
+  1132→│   │   │   │   └── custom/
+  1133→│   │   │   │       ├── wholesale-prices/route.ts
+  1134→│   │   │   │       ├── delivery-zones/route.ts
+  1135→│   │   │   │       └── order-templates/route.ts
+  1136→│   │   │   └── admin/                 # Admin-facing custom endpoints
+  1137→│   │   │       └── custom/
+  1138→│   │   │           ├── erp-sync/route.ts
+  1139→│   │   │           └── reports/route.ts
+  1140→│   │   ├── modules/                   # Custom Medusa modules
+  1141→│   │   │   ├── wholesale/
+  1142→│   │   │   │   ├── models/
+  1143→│   │   │   │   │   └── price-tier.ts
+  1144→│   │   │   │   ├── services/
+  1145→│   │   │   │   │   └── wholesale-pricing.service.ts
+  1146→│   │   │   │   └── index.ts
+  1147→│   │   │   ├── delivery/
+  1148→│   │   │   │   ├── models/
+  1149→│   │   │   │   │   ├── delivery-zone.ts
+  1150→│   │   │   │   │   └── delivery-slot.ts
+  1151→│   │   │   │   ├── services/
+  1152→│   │   │   │   │   └── delivery.service.ts
+  1153→│   │   │   │   └── index.ts
+  1154→│   │   │   └── subscription/
+  1155→│   │   │       ├── models/
+  1156→│   │   │       │   └── subscription-schedule.ts
+  1157→│   │   │       ├── services/
+  1158→│   │   │       │   └── subscription.service.ts
+  1159→│   │   │       └── index.ts
+  1160→│   │   ├── subscribers/               # Medusa event subscribers
+  1161→│   │   │   ├── order-placed.subscriber.ts
+  1162→│   │   │   ├── customer-created.subscriber.ts
+  1163→│   │   │   └── payment-captured.subscriber.ts
+  1164→│   │   ├── workflows/                 # Medusa workflows
+  1165→│   │   │   ├── create-wholesale-order.ts
+  1166→│   │   │   ├── validate-erp-inventory.ts
+  1167→│   │   │   └── apply-bulk-pricing.ts
+  1168→│   │   └── loaders/                   # Startup configuration loaders
+  1169→│   │       └── redis-loader.ts
+  1170→│   ├── medusa-config.ts
+  1171→│   ├── package.json
+  1172→│   └── tsconfig.json
+  1173→│
+  1174→├── worker/                            # BullMQ worker process
+  1175→│   ├── src/
+  1176→│   │   ├── queues/                    # Queue definitions
+  1177→│   │   │   ├── erp-sync.queues.ts
+  1178→│   │   │   ├── order.queues.ts
+  1179→│   │   │   ├── notification.queues.ts
+  1180→│   │   │   └── maintenance.queues.ts
+  1181→│   │   ├── processors/                # Job handler functions
+  1182→│   │   │   ├── erp/
+  1183→│   │   │   │   ├── sync-inventory.processor.ts
+  1184→│   │   │   │   ├── sync-products.processor.ts
+  1185→│   │   │   │   ├── push-order.processor.ts
+  1186→│   │   │   │   ├── sync-customers.processor.ts
+  1187→│   │   │   │   └── sync-invoice.processor.ts
+  1188→│   │   │   ├── orders/
+  1189→│   │   │   │   ├── send-confirmation.processor.ts
+  1190→│   │   │   │   └── send-shipping.processor.ts
+  1191→│   │   │   ├── notifications/
+  1192→│   │   │   │   ├── send-sms.processor.ts
+  1193→│   │   │   │   └── send-email.processor.ts
+  1194→│   │   │   └── maintenance/
+  1195→│   │   │       ├── cache-invalidate.processor.ts
+  1196→│   │   │       └── report-generate.processor.ts
+  1197→│   │   ├── clients/
+  1198→│   │   │   ├── medusa-admin.client.ts  # Medusa Admin API client
+  1199→│   │   │   └── erpnext.client.ts       # ERPNext REST client
+  1200→│   │   ├── lib/
+  1201→│   │   │   ├── redis.ts                # BullMQ Redis connection
+  1202→│   │   │   ├── logger.ts               # Structured JSON logger (pino)
+  1203→│   │   │   └── metrics.ts              # Prometheus counters/histograms
+  1204→│   │   └── index.ts                    # Worker entry point: registers all queues + processors
+  1205→│   ├── package.json
+  1206→│   └── tsconfig.json
+  1207→│
+  1208→└── shared/                            # Shared types between Medusa + Worker
+  1209→    ├── src/
+  1210→    │   ├── types/
+  1211→    │   │   ├── product.types.ts
+  1212→    │   │   ├── order.types.ts
+  1213→    │   │   ├── erp.types.ts
+  1214→    │   │   └── events.types.ts         # Event name constants
+  1215→    │   ├── constants/
+  1216→    │   │   ├── queues.ts               # Queue name registry
+  1217→    │   │   ├── erp-field-mappings.ts   # ERP Item → Medusa Product field map
+  1218→    │   │   └── currencies.ts
+  1219→    │   └── utils/
+  1220→    │       ├── pricing.ts              # Wholesale price calculation (shared with frontend)
+  1221→    │       ├── formatting.ts           # EGP formatting, date locales
+  1222→    │       └── validation.ts           # Shared Zod schemas
+  1223→    └── package.json
+  1224→```
+  1225→
+  1226→### Backend Folder Rules
+  1227→
+  1228→| Rule | Detail |
+  1229→|---|---|
+  1230→| **Medusa modules are self-contained** | Each module in `medusa/src/modules/` owns its models, services, and index. No cross-module imports. |
+  1231→| **Processors are stateless** | A BullMQ processor receives job data, performs work, and returns. No global mutable state. |
+  1232→| **Shared code lives in `shared/`** | Types, constants, and pure functions used by both Medusa and the Worker go in `backend/shared/`. Neither imports from the other directly. |
+  1233→| **ERP field mappings are centralized** | `shared/src/constants/erp-field-mappings.ts` is the single source of truth for how ERP Item fields map to Medusa Product fields. When ERP changes a field name, one file changes. |
+  1234→
+  1235→---
+  1236→
+  1237→## 17. plugins/ — Custom Medusa Modules
+  1238→
+  1239→### Purpose
+  1240→
+  1241→The `plugins/` directory holds standalone Medusa module packages that can be published and reused across Medusa projects. These are more formal than the modules in `backend/medusa/src/modules/` — they have their own `package.json`, tests, and documentation.
+  1242→
+  1243→### When to Use `plugins/` vs `backend/medusa/src/modules/`
+  1244→
+  1245→| Use `backend/medusa/src/modules/` | Use `plugins/` |
+  1246→|---|---|
+  1247→| GGH-specific business logic (delivery zones for Cairo) | Reusable commerce patterns (wholesale pricing engine) |
+  1248→| Tightly coupled to GGH's ERP field mappings | Framework-agnostic domain logic |
+  1249→| Not intended for reuse outside GGH | Could be used by other Medusa projects |
+  1250→
+  1251→### Structure
+  1252→
+  1253→```
+  1254→plugins/
+  1255→├── medusa-wholesale/                  # Wholesale pricing module
+  1256→│   ├── src/
+  1257→│   │   ├── models/
+  1258→│   │   │   └── price-tier.ts
+  1259→│   │   ├── services/
+  1260→│   │   │   ├── wholesale-pricing.service.ts
+  1261→│   │   │   └── bulk-break-calculator.ts
+  1262→│   │   ├── types/
+  1263→│   │   │   └── index.ts
+  1264→│   │   └── index.ts
+  1265→│   ├── package.json                   # @ggh/medusa-wholesale
+  1266→│   ├── tsconfig.json
+  1267→│   └── README.md
+  1268→│
+  1269→├── medusa-delivery-zones/             # Delivery zone management module
+  1270→│   ├── src/
+  1271→│   │   ├── models/
+  1272→│   │   │   ├── delivery-zone.ts
+  1273→│   │   │   └── delivery-slot.ts
+  1274→│   │   ├── services/
+  1275→│   │   │   ├── zone-resolver.ts
+  1276→│   │   │   └── slot-availability.ts
+  1277→│   │   ├── types/
+  1278→│   │   │   └── index.ts
+  1279→│   │   └── index.ts
+  1280→│   ├── package.json                   # @ggh/medusa-delivery-zones
+  1281→│   ├── tsconfig.json
+  1282→│   └── README.md
+  1283→│
+  1284→└── medusa-order-templates/            # B2B order template module
+  1285→    ├── src/
+  1286→    │   ├── models/
+  1287→    │   │   └── order-template.ts
+  1288→    │   ├── services/
+  1289→    │   │   └── template.service.ts
+  1290→    │   ├── types/
+  1291→    │   │   └── index.ts
+  1292→    │   └── index.ts
+  1293→    ├── package.json                   # @ggh/medusa-order-templates
+  1294→    ├── tsconfig.json
+  1295→    └── README.md
+  1296→```
+  1297→
+  1298→---
+  1299→
+  1300→## 18. docker/ — Containerization
+  1301→
+  1302→### Purpose
+  1303→
+  1304→Dockerfiles for each service and Docker Compose configurations for development and production environments.
+  1305→
+  1306→### Structure
+  1307→
+  1308→```
+  1309→docker/
+  1310→├── docker-compose.yml                 # Production orchestration
+  1311→├── docker-compose.dev.yml             # Development environment (hot reload, mock ERP)
+  1312→├── docker-compose.test.yml            # Integration test environment
+  1313→│
+  1314→├── nextjs/
+  1315→│   ├── Dockerfile                     # Multi-stage: deps → build → production
+  1316→│   └── .dockerignore
+  1317→│
+  1318→├── medusa/
+  1319→│   ├── Dockerfile                     # Multi-stage: deps → build → production
+  1320→│   └── .dockerignore
+  1321→│
+  1322→├── worker/
+  1323→│   ├── Dockerfile                     # Single-stage: deps → run
+  1324→│   └── .dockerignore
+  1325→│
+  1326→├── erpnext/
+  1327→│   ├── Dockerfile                     # Based on frappe/erpnext image + custom app
+  1328→│   └── .dockerignore
+  1329→│
+  1330→└── nginx/
+  1331→    ├── nginx.conf                     # Reverse proxy + TLS termination + rate limiting
+  1332→    └── Dockerfile
+  1333→```
+  1334→
+  1335→### Dockerfile Best Practices
+  1336→
+  1337→| Practice | Detail |
+  1338→|---|---|
+  1339→| **Multi-stage builds** | Separate `deps` stage (install everything) from `build` stage (compile TypeScript) from `production` stage (copy only what's needed). Keeps images small. |
+  1340→| **Non-root user** | Production stage runs as `nextjs` or `node` user, never `root`. |
+  1341→| **Health checks** | Every Dockerfile includes a `HEALTHCHECK` instruction that hits the service's `/health` endpoint. |
+  1342→| **Layer caching** | Copy `package.json` and lock file first, install deps, then copy source code. Code changes don't invalidate the deps layer. |
+  1343→
+  1344→---
+  1345→
+  1346→## 19. docs/ — Documentation
+  1347→
+  1348→### Purpose
+  1349→
+  1350→All project documentation, organized as numbered files for sequential reading and themed folders for operational guides.
+  1351→
+  1352→### Structure
+  1353→
+  1354→```
+  1355→docs/
+  1356→├── 01_ProjectVision.md                # ✅ Project goals, personas, design philosophy
+  1357→├── 02_Architecture.md                 # ✅ Service responsibilities, data flow, communication
+  1358→├── 03_FolderStructure.md              # ✅ This file
+  1359→├── 04_DesignSystem.md                 # Visual design tokens, component specs, RTL rules
+  1360→├── 05_CodingStandards.md              # TypeScript rules, naming, linting, PR conventions
+  1361→├── 06_Database.md                     # Schema, migrations, indexing, backup strategy
+  1362→├── 07_API.md                          # Endpoint catalog, request/response shapes, auth
+  1363→├── 08_Authentication.md               # Auth flows, session management, service tokens
+  1364→├── 09_CommerceFlow.md                 # Cart → checkout → order → fulfillment lifecycle
+  1365→├── 10_ProductCatalog.md               # Product model, categories, pricing tiers, sync
+  1366→├── 11_ERPIntegration.md               # Sync rules, field mappings, conflict resolution
+  1367→├── 12_TestingStrategy.md              # Unit, integration, E2E, accessibility testing
+  1368→├── 13_Deployment.md                   # Environments, CI/CD, rollback, monitoring
+  1369→├── 14_Backlog.md                      # Feature backlog, priorities, phase assignments
+  1370→├── 15_DeveloperGuide.md               # Onboarding, local setup, development workflow
+  1371→│
+  1372→├── runbooks/                          # Operational runbooks for incident response
+  1373→│   ├── erp-sync-failure.md
+  1374→│   ├── order-stuck-pending.md
+  1375→│   ├── redis-memory-pressure.md
+  1376→│   └── deployment-rollback.md
+  1377→│
+  1378→└── api/                               # Auto-generated API documentation
+  1379→    ├── storefront-api.md              # Next.js BFF API reference
+  1380→    └── erp-sync-api.md                # ERP integration API reference
+  1381→```
+  1382→
+  1383→---
+  1384→
+  1385→## 20. scripts/ — Automation & Tooling
+  1386→
+  1387→### Purpose
+  1388→
+  1389→One-off and recurring scripts for database seeding, data migration, ERP initial sync, and deployment helpers. These are run manually or triggered by CI, not by the application at runtime.
+  1390→
+  1391→### Structure
+  1392→
+  1393→```
+  1394→scripts/
+  1395→├── seed/
+  1396→│   ├── seed-products.ts               # Populate Medusa with sample product data
+  1397→│   ├── seed-categories.ts             # Create category tree
+  1398→│   ├── seed-deals.ts                  # Create sample hot deals
+  1399→│   └── seed-all.ts                    # Run all seed scripts in order
+  1400→│
+  1401→├── sync/
+  1402→│   ├── initial-erp-sync.ts            # Full product + inventory pull from ERPNext
+  1403→│   ├── backfill-erp-orders.ts         # Push historical orders to ERPNext
+  1404→│   └── verify-sync-consistency.ts     # Compare Medusa vs ERP data, report discrepancies
+  1405→│
+  1406→├── migrate/
+  1407→│   ├── ggh-schema-init.ts             # Create ggh schema and custom tables
+  1408→│   └── ggh-schema-seed.ts             # Seed delivery zones and slots
+  1409→│
+  1410→├── deploy/
+  1411→│   ├── pre-deploy-checks.sh           # Verify environment variables, health endpoints
+  1412→│   ├── post-deploy-verify.sh          # Smoke test critical paths after deploy
+  1413→│   └── rollback.sh                    # Rollback to previous container image
+  1414→│
+  1415→└── dev/
+  1416→    ├── setup-local.sh                 # First-time local development setup
+  1417→    └── reset-db.sh                    # Drop and recreate local database
+  1418→```
+  1419→
+  1420→### Script Rules
+  1421→
+  1422→| Rule | Detail |
+  1423→|---|---|
+  1424→| **Idempotent** | Every script can be run multiple times safely. `seed-products.ts` checks if products exist before inserting. |
+  1425→| **TypeScript** | All scripts are written in TypeScript and run with `tsx` or `bun`. No bare `.sh` scripts except for CI/deploy helpers. |
+  1426→| **Dry-run mode** | Destructive scripts (`reset-db.sh`, `backfill-erp-orders.ts`) accept a `--dry-run` flag that logs what would happen without executing. |
+  1427→| **Documented** | Every script has a comment header explaining what it does, when to run it, and what arguments it accepts. |
+  1428→
+  1429→---
+  1430→
+  1431→## 21. File Naming Conventions
+  1432→
+  1433→### General Rules
+  1434→
+  1435→| Pattern | Convention | Example |
+  1436→|---|---|---|
+  1437→| React components | `kebab-case.tsx` | `product-card.tsx` |
+  1438→| React hooks | `kebab-case.ts` with `use-` prefix | `use-cart.ts` |
+  1439→| Utility functions | `kebab-case.ts` | `format-egp.ts` |
+  1440→| Type definitions | `kebab-case.types.ts` | `product.types.ts` |
+  1441→| API route handlers | `route.ts` (Next.js convention) | `app/api/cart/route.ts` |
+  1442→| Service files | `kebab-case.service.ts` | `product.service.ts` |
+  1443→| Test files | `kebab-case.test.ts` (co-located) | `product-card.test.tsx` |
+  1444→| CSS files | `kebab-case.css` | `globals.css` |
+  1445→| Translation files | `locale.json` | `en.json`, `ar.json` |
+  1446→| Docker files | `Dockerfile` (capital D) | `docker/nextjs/Dockerfile` |
+  1447→| Environment templates | `.env.example` | `frontend/.env.example` |
+  1448→
+  1449→### Directory Naming
+  1450→
+  1451→| Pattern | Convention | Example |
+  1452→|---|---|---|
+  1453→| Route groups | `(kebab-case)` — parentheses in Next.js | `(shop)/`, `(auth)/` |
+  1454→| Dynamic routes | `[kebab-case]` — brackets in Next.js | `[slug]/`, `[handle]/` |
+  1455→| Feature directories | `kebab-case` | `features/product/`, `features/order-template/` |
+  1456→| Component directories | `kebab-case` | `components/navigation/` |
+  1457→
+  1458→---
+  1459→
+  1460→## 22. Import Rules & Boundaries
+  1461→
+  1462→### Allowed Import Directions
+  1463→
+  1464→```
+  1465→app/         ← imports from: features/, components/, providers/, lib/, types/
+  1466→features/    ← imports from: components/, hooks/, services/, lib/, utils/, types/
+  1467→components/  ← imports from: lib/, utils/, types/
+  1468→hooks/       ← imports from: services/, lib/, utils/, types/
+  1469→services/    ← imports from: lib/, types/, utils/
+  1470→lib/         ← imports from: types/, utils/
+  1471→providers/   ← imports from: hooks/, lib/, types/
+  1472→utils/       ← imports from: NOTHING (pure functions only)
+  1473→types/       ← imports from: utils/ (rarely)
+  1474→locales/     ← no imports (data files only)
+  1475→styles/      ← no imports (CSS only)
+  1476→```
+  1477→
+  1478→### Forbidden Imports
+  1479→
+  1480→| From | To | Why |
+  1481→|---|---|---|
+  1482→| `components/` | `features/` | UI primitives must not depend on domain logic |
+  1483→| `utils/` | `lib/`, `services/`, `hooks/` | Utils are leaf nodes. Zero internal dependencies. |
+  1484→| `services/` | `features/` | Services are data fetchers, not domain-aware |
+  1485→| `features/product/` | `features/cart/` | No cross-feature imports (except cart hooks — see below) |
+  1486→| Any file | `node_modules` direct import without barrel | All third-party imports should go through a named import |
+  1487→
+  1488→### The Cart Exception
+  1489→
+  1490→The cart is unique because multiple features need to add items to it (product card, deal card, reorder button). The cart feature exposes its hooks as a **public API**:
+  1491→
+  1492→```typescript
+  1493→// features/cart/hooks/use-cart.ts — PUBLIC API
+  1494→export function useCart() {
+  1495→  // ... implementation
+  1496→  return { cart, addItem, updateItem, removeItem, summary } as const;
+  1497→}
+  1498→```
+  1499→
+  1500→Other features may import `useCart` from `features/cart/hooks/use-cart`. This is the **only** permitted cross-feature import. All other cross-feature communication happens through:
+  1501→- **Props** (parent page passes callbacks)
+  1502→- **Events** (BullMQ on the backend)
+  1503→- **Shared state** (Zustand store in `features/cart/store/`)
+  1504→
+  1505→---
+  1506→
+  1507→## 23. Adding a New Feature — Checklist
+  1508→
+  1509→When a developer adds a new feature (e.g., "Wishlist"), follow this checklist:
+  1510→
+  1511→```
+  1512→1. Create the feature directory
+  1513→   mkdir -p frontend/src/features/wishlist/{components,hooks,types,utils}
+  1514→
+  1515→2. Define types
+  1516→   Create frontend/src/features/wishlist/types/wishlist.types.ts
+  1517→   If types are shared across features, move to frontend/src/types/
+  1518→
+  1519→3. Create service functions
+  1520→   Add wishlist functions to frontend/src/services/wishlist.service.ts
+  1521→
+  1522→4. Create hooks
+  1523→   Create frontend/src/features/wishlist/hooks/use-wishlist.ts
+  1524→
+  1525→5. Create components
+  1526→   Create frontend/src/features/wishlist/components/wishlist-card.tsx
+  1527→   Create frontend/src/features/wishlist/components/wishlist-page.tsx
+  1528→
+  1529→6. Add translations
+  1530→   Add "wishlist" namespace to frontend/src/locales/en.json and ar.json
+  1531→
+  1532→7. Add API route (if needed)
+  1533→   Create frontend/src/app/api/wishlist/route.ts
+  1534→
+  1535→8. Add page route
+  1536→   Create frontend/src/app/(account)/wishlist/page.tsx
+  1537→
+  1538→9. Verify import boundaries
+  1539→   - No import from other features (except useCart if adding to cart)
+  1540→   - No business logic in page.tsx
+  1541→   - All API calls go through service functions
+  1542→
+  1543→10. Verify accessibility
+  1544→    - 48px touch targets on all interactive elements
+  1545→    - Arabic labels on all elements
+  1546→    - RTL layout tested with dir="rtl"
+  1547→    - Screen reader announces state changes (added/removed from wishlist)
+  1548→```
+  1549→
+  1550→---
+  1551→
+  1552→*This document is maintained by the GGH engineering team. When the folder structure changes, update this document in the same PR.*
+  1553→
+  1554→*Last updated: July 2026*
+  1555→

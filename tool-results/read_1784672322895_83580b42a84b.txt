@@ -1,0 +1,1110 @@
+     1→# 06 — Database
+     2→
+     3→> **GGH — Gomla Go Home** — Entity design, relationships, naming conventions, indexing strategy, and data integrity rules. The structural foundation of the platform.
+     4→
+     5→---
+     6→
+     7→## Table of Contents
+     8→
+     9→1. [Database Philosophy](#1-database-philosophy)
+    10→2. [Naming Conventions](#2-naming-conventions)
+    11→3. [Schema Organization](#3-schema-organization)
+    12→4. [Entity Relationship Overview](#4-entity-relationship-overview)
+    13→5. [Core Commerce Entities](#5-core-commerce-entities)
+    14→6. [GGH Custom Entities](#6-ggh-custom-entities)
+    15→7. [ERP Sync Entities](#7-erp-sync-entities)
+    16→8. [Entity Definitions](#8-entity-definitions)
+    17→9. [Relationship Map](#9-relationship-map)
+    18→10. [Index Strategy](#10-index-strategy)
+    19→11. [Data Integrity Rules](#11-data-integrity-rules)
+    20→12. [Soft Delete Strategy](#12-soft-delete-strategy)
+    21→13. [Money Handling](#13-money-handling)
+    22→14. [Localization Storage](#14-localization-storage)
+    23→15. [Audit & Timestamps](#15-audit--timestamps)
+    24→16. [Migration Strategy](#16-migration-strategy)
+    25→17. [Backup & Recovery](#17-backup--recovery)
+    26→
+    27→---
+    28→
+    29→## 1. Database Philosophy
+    30→
+    31→| Principle | Rule | Why |
+    32→|---|---|---|
+    33→| **Medusa owns its schema** | The `public` schema is managed entirely by Medusa's migration engine. GGH never modifies Medusa tables directly. | Medusa upgrades will break if we alter their tables. Custom data lives in our own schema. |
+    34→| **GGH data is separate** | All GGH-specific tables live in the `ggh` schema. Cross-schema references use foreign keys to Medusa's IDs stored as text. | Clean separation. GGH migrations don't conflict with Medusa migrations. |
+    35→| **Integers for money** | All monetary values are stored as piastres (1/100 of a pound) in `INTEGER` columns. No `DECIMAL`, no `FLOAT`, no `NUMERIC`. | Floating-point arithmetic causes rounding errors. EGP 110.50 becomes `11050` — exact, always. |
+    36→| **UUIDs for primary keys** | Every table uses `UUID` primary keys generated with `gen_random_uuid()`. No auto-incrementing integers. | UUIDs are globally unique, safe to generate client-side, and don't leak record counts. |
+    37→| **Soft delete by default** | Records are never physically deleted. A `deleted_at` timestamp marks deletion. | Orders, products, and customers must be recoverable. Physical deletion breaks referential integrity. |
+    38→| **Timestamps on everything** | Every table has `created_at` and `updated_at`. Every sync table has a `created_at` only (immutable logs). | Audit trail. Debugging. Replication. No exceptions. |
+    39→| **Bilingual fields are paired** | Every user-facing text field has `_en` and `_ar` companions. | Product names, category names, and zone names exist in both languages. Never store "current locale" — store both. |
+    40→| **No arrays in columns** | No `ARRAY` column types. Use junction tables for many-to-many relationships. | Arrays in columns are not queryable, not indexable, and not relational. Junction tables are. |
+    41→
+    42→---
+    43→
+    44→## 2. Naming Conventions
+    45→
+    46→### 2.1 Table Naming
+    47→
+    48→| Entity Type | Convention | Example |
+    49→|---|---|---|
+    50→| Medusa core tables | Managed by Medusa (snake_case) | `product`, `product_variant`, `order`, `customer` |
+    51→| GGH custom tables | `snake_case`, prefixed by domain | `delivery_zone`, `delivery_slot`, `price_tier` |
+    52→| Junction tables | Both entity names, alphabetically | `product_category`, `customer_group_customer` |
+    53→| Audit/log tables | Entity name + `_log` | `erp_sync_log`, `order_status_log` |
+    54→| Schema name | `ggh` | `ggh.delivery_zone`, `ggh.erp_sync_log` |
+    55→
+    56→### 2.2 Column Naming
+    57→
+    58→| Pattern | Convention | Example |
+    59→|---|---|---|
+    60→| Primary key | `id` | `id` (always UUID) |
+    61→| Foreign key | Referenced table singular + `_id` | `customer_id`, `product_id`, `zone_id` |
+    62→| Timestamp | `_at` suffix | `created_at`, `updated_at`, `deleted_at`, `delivered_at` |
+    63→| Boolean | `is_` or `has_` prefix | `is_active`, `is_case_pack`, `has_free_delivery` |
+    64→| Money amount | `_amount` suffix, integer (piastres) | `base_rate_amount`, `total_amount`, `savings_amount` |
+    65→| Bilingual text | `_en` and `_ar` suffix pair | `name_en` / `name_ar`, `description_en` / `description_ar` |
+    66→| JSON data | `_data` suffix | `regions_data`, `items_data`, `metadata_data` |
+    67→| Count | `_count` suffix | `max_orders_count`, `current_orders_count` |
+    68→| Enumeration | Column name only (string with check constraint) | `status`, `direction`, `entity_type` |
+    69→
+    70→### 2.3 Constraint Naming
+    71→
+    72→| Constraint Type | Convention | Example |
+    73→|---|---|---|
+    74→| Primary key | `pk_<table>` | `pk_delivery_zone` |
+    75→| Foreign key | `fk_<table>_<referenced_table>` | `fk_delivery_slot_zone` |
+    76→| Unique | `uq_<table>_<columns>` | `uq_price_tier_variant_min_qty` |
+    77→| Check | `ck_<table>_<column>` | `ck_delivery_slot_max_orders` |
+    78→| Index | `ix_<table>_<columns>` | `ix_erp_sync_log_entity_status` |
+    79→
+    80→---
+    81→
+    82→## 3. Schema Organization
+    83→
+    84→```
+    85→┌─────────────────────────────────────────────────────────┐
+    86→│                    PostgreSQL Instance                    │
+    87→│                                                         │
+    88→│  ┌───────────────────────────────────────────────────┐  │
+    89→│  │  Schema: public (Medusa)                          │  │
+    90→│  │                                                   │  │
+    91→│  │  Owned by: Medusa migration engine                │  │
+    92→│  │  Modified by: NEVER by GGH directly               │  │
+    93→│  │                                                   │  │
+    94→│  │  Tables:                                          │  │
+    95→│  │    product, product_variant, product_category,    │  │
+    96→│  │    product_collection, product_tag,               │  │
+    97→│  │    product_image, product_option,                 │  │
+    98→│  │    price, price_set, price_list,                  │  │
+    99→│  │    cart, cart_line_item, cart_shipping_method,    │  │
+   100→│  │    order, order_line_item, order_shipping_method, │  │
+   101→│  │    order_address, order_summary,                  │  │
+   102→│  │    customer, customer_group, customer_address,    │  │
+   103→│  │    payment, payment_session, payment_collection,  │  │
+   104→│  │    fulfillment, fulfillment_item,                 │  │
+   105→│  │    shipping_option, shipping_profile,             │  │
+   106→│  │    inventory_item, inventory_level,               │  │
+   107→│  │    stock_location, reservation_item,              │  │
+   108→│  │    notification, notification_provider,           │  │
+   109→│  │    api_key, store, region, currency,              │  │
+   110→│  │    ... (40+ tables managed by Medusa)             │  │
+   111→│  └───────────────────────────────────────────────────┘  │
+   112→│                                                         │
+   113→│  ┌───────────────────────────────────────────────────┐  │
+   114→│  │  Schema: ggh (GGH Custom)                        │  │
+   115→│  │                                                   │  │
+   116→│  │  Owned by: GGH team                               │  │
+   117→│  │  Modified by: GGH migration scripts               │  │
+   118→│  │                                                   │  │
+   119→│  │  Tables:                                          │  │
+   120→│  │    delivery_zone, delivery_slot,                  │  │
+   121→│  │    price_tier, order_template,                    │  │
+   122→│  │    erp_sync_log, erp_sync_cursor,                 │  │
+   123→│  │    order_status_log,                              │  │
+   124→│  │    wholesale_account,                             │  │
+   125→│  │    delivery_proof,                                │  │
+   126→│  │    notification_preference                        │  │
+   127→│  └───────────────────────────────────────────────────┘  │
+   128→│                                                         │
+   129→└─────────────────────────────────────────────────────────┘
+   130→```
+   131→
+   132→### Schema Communication
+   133→
+   134→The `ggh` schema references the `public` schema by storing Medusa entity IDs as text columns. These are not true foreign keys (cross-schema FKs create coupling that prevents independent migration), but application-level references enforced by code.
+   135→
+   136→| GGH Table | References Medusa Entity | Column | Type |
+   137→|---|---|---|---|
+   138→| `ggh.price_tier` | `public.product_variant` | `variant_id` | `TEXT` |
+   139→| `ggh.order_template` | `public.customer` | `customer_id` | `TEXT` |
+   140→| `ggh.wholesale_account` | `public.customer` | `customer_id` | `TEXT` |
+   141→| `ggh.delivery_proof` | `public.order` | `order_id` | `TEXT` |
+   142→| `ggh.notification_preference` | `public.customer` | `customer_id` | `TEXT` |
+   143→| `ggh.erp_sync_log` | `public.product` / `public.order` / `public.customer` | `entity_id` | `TEXT` |
+   144→| `ggh.order_status_log` | `public.order` | `order_id` | `TEXT` |
+   145→
+   146→---
+   147→
+   148→## 4. Entity Relationship Overview
+   149→
+   150→```
+   151→┌─────────────────────────────────────────────────────────────────────┐
+   152→│                        ENTITY RELATIONSHIP MAP                       │
+   153→│                                                                     │
+   154→│  CUSTOMER ──────────────┬── CART ────────── CART_LINE_ITEM          │
+   155→│  (Medusa)               │   (Medusa)         references PRODUCT     │
+   156→│     │                   │                      VARIANT              │
+   157→│     │                   │                                            │
+   158→│     ├── CUSTOMER_GROUP  │   ORDER ────────── ORDER_LINE_ITEM        │
+   159→│     │   (Medusa)        │   (Medusa)         references PRODUCT     │
+   160→│     │                   │                      VARIANT              │
+   161→│     ├── WHOLESALE_ACCT  │        │                                   │
+   162→│     │   (ggh)           │        ├── DELIVERY_PROOF (ggh)           │
+   163→│     │                   │        └── ORDER_STATUS_LOG (ggh)         │
+   164→│     ├── ORDER_TEMPLATE  │                                            │
+   165→│     │   (ggh)           │   PRODUCT ──────── PRODUCT_VARIANT        │
+   166→│     │                   │   (Medusa)         references PRICE_TIER  │
+   167→│     └── NOTIF_PREF      │   (Medusa)           (ggh)               │
+   168→│         (ggh)           │                                            │
+   169→│                         │   PRODUCT_CATEGORY (Medusa)               │
+   170→│  DELIVERY_ZONE ─────────┤                                            │
+   171→│  (ggh)                  │   INVENTORY_ITEM ── INVENTORY_LEVEL       │
+   172→│     │                   │   (Medusa)         (Medusa)               │
+   173→│     └── DELIVERY_SLOT   │                                            │
+   174→│         (ggh)           │   ERP_SYNC_LOG (ggh)                      │
+   175→│                         │   ERP_SYNC_CURSOR (ggh)                   │
+   176→│                         │                                            │
+   177→└─────────────────────────────────────────────────────────────────────┘
+   178→```
+   179→
+   180→---
+   181→
+   182→## 5. Core Commerce Entities
+   183→
+   184→These entities are owned by Medusa. GGH reads and writes them through the Medusa API, never through direct database access. The definitions below describe how GGH uses them, not their full Medusa schema.
+   185→
+   186→### 5.1 Product
+   187→
+   188→| Aspect | GGH Usage |
+   189→|---|---|
+   190→| **Purpose** | Canonical product definition (e.g., "Al Doha Basmati Rice") |
+   191→| **Key fields used** | `id`, `title`, `handle`, `description`, `thumbnail`, `status`, `category_id`, `metadata` |
+   192→| **GGH metadata** | `metadata.name_ar` — Arabic product name (not natively supported by Medusa) |
+   193→| **GGH metadata** | `metadata.brand` — Brand name (e.g., "Al Doha", "El Maleka") |
+   194→| **GGH metadata** | `metadata.erp_item_code` — ERPNext Item Code for sync |
+   195→| **GGH metadata** | `metadata.moq` — Minimum order quantity for this product |
+   196→| **Created by** | ERP sync (primary) or Medusa Admin (manual) |
+   197→| **Soft deleted** | Yes — Medusa sets `deleted_at` |
+   198→
+   199→### 5.2 Product Variant
+   200→
+   201→| Aspect | GGH Usage |
+   202→|---|---|
+   203→| **Purpose** | A specific pack size of a product (e.g., "1kg", "5kg", "25kg") |
+   204→| **Key fields used** | `id`, `product_id`, `title`, `sku`, `barcode`, `allow_backorder`, `metadata` |
+   205→| **GGH metadata** | `metadata.weight_kg` — Weight in kilograms |
+   206→| **GGH metadata** | `metadata.unit` — Unit of measure ("kg", "L", "pack") |
+   207→| **GGH metadata** | `metadata.is_case_pack` — Whether this is a case-pack variant |
+   208→| **GGH metadata** | `metadata.case_size` — Number of units in a case (if case pack) |
+   209→| **GGH metadata** | `metadata.moq` — Variant-level minimum order quantity |
+   210→| **Relationship** | Belongs to Product. Has many PriceTiers (ggh). Has one InventoryLevel. |
+   211→
+   212→### 5.3 Product Category
+   213→
+   214→| Aspect | GGH Usage |
+   215→|---|---|
+   216→| **Purpose** | Product grouping (e.g., "Rice & Grains", "Oils & Fats") |
+   217→| **Key fields used** | `id`, `name`, `handle`, `parent_category_id`, `rank`, `metadata` |
+   218→| **GGH metadata** | `metadata.name_ar` — Arabic category name |
+   219→| **GGH metadata** | `metadata.icon_emoji` — Emoji for category display (🍚, 🫒, ☕) |
+   220→| **GGH metadata** | `metadata.erp_item_group` — ERPNext Item Group name for sync |
+   221→| **Structure** | Two-level hierarchy only: parent category → child categories. No deeper nesting. |
+   222→| **The 15 categories** | Rice & Grains, Pasta & Noodles, Flour & Baking, Sugar & Sweeteners, Oils & Fats, Ghee & Butter, Beans & Lentils, Tea & Coffee, Spices & Seasonings, Tomato Paste & Sauces, Canned Foods, Frozen Food, Cleaning Products, Paper Products, Household Essentials |
+   223→
+   224→### 5.4 Price and Price List
+   225→
+   226→| Aspect | GGH Usage |
+   227→|---|---|
+   228→| **Purpose** | Product pricing — Medusa natively supports price lists per customer group |
+   229→| **How wholesale pricing works** | Three Price Lists in Medusa: "Retail Price", "Wholesale Price", "Bulk Price". Each is assigned to the corresponding Customer Group. |
+   230→| **Price amounts** | Stored in piastres (integer). Currency: EGP. |
+   231→| **Bulk-break tiers** | GGH supplements Medusa pricing with the `ggh.price_tier` table for quantity-based discounts within a price list. |
+   232→| **Created by** | ERP sync (primary). Admin (overrides). |
+   233→
+   234→### 5.5 Customer
+   235→
+   236→| Aspect | GGH Usage |
+   237→|---|---|
+   238→| **Purpose** | Registered user with authentication credentials |
+   239→| **Key fields used** | `id`, `email`, `phone`, `first_name`, `last_name`, `metadata` |
+   240→| **GGH metadata** | `metadata.name_ar` — Arabic display name (some customers prefer Arabic) |
+   241→| **GGH metadata** | `metadata.preferred_locale` — "en" or "ar" |
+   242→| **GGH metadata** | `metadata.wholesale_status` — "pending", "verified", "enterprise" |
+   243→| **Groups** | Assigned to Customer Groups: "retail", "wholesale-pending", "wholesale-verified", "wholesale-enterprise" |
+   244→
+   245→### 5.6 Customer Group
+   246→
+   247→| Group | Criteria | Price Access | Delivery |
+   248→|---|---|---|---|
+   249→| `retail` | Default on registration | Retail price list only | Standard zones |
+   250→| `wholesale-pending` | Applied for wholesale but not yet verified | Retail prices until verified | Standard zones |
+   251→| `wholesale-verified` | Business documents approved | Wholesale + Bulk price lists | Priority zones + net-30 |
+   252→| `wholesale-enterprise` | Manual assignment by sales team | Custom pricing + all tiers | Dedicated slots + net-30 |
+   253→
+   254→### 5.7 Cart
+   255→
+   256→| Aspect | GGH Usage |
+   257→|---|---|
+   258→| **Purpose** | Shopping cart before checkout. Created on first session, persists across page loads. |
+   259→| **Key fields used** | `id`, `customer_id`, `email`, `region_id`, `metadata` |
+   260→| **GGH metadata** | `metadata.delivery_slot_id` — Selected delivery time slot |
+   261→| **GGH metadata** | `metadata.delivery_zone_id` — Resolved delivery zone |
+   262→| **GGH metadata** | `metadata.locale` — Cart's locale at creation time |
+   263→| **Guest carts** | Created without `customer_id`. Merged on login. |
+   264→| **Cart expiry** | Carts inactive for 30 days are cleaned up by a scheduled job. |
+   265→
+   266→### 5.8 Cart Line Item
+   267→
+   268→| Aspect | GGH Usage |
+   269→|---|---|
+   270→| **Purpose** | Individual item in a cart |
+   271→| **Key fields used** | `id`, `cart_id`, `variant_id`, `quantity`, `unit_price`, `subtotal`, `metadata` |
+   272→| **GGH metadata** | `metadata.price_tier_name` — Which pricing tier was active when added |
+   273→| **GGH metadata** | `metadata.savings_amount` — Savings vs. retail price at time of add |
+   274→| **Quantity validation** | Must meet MOQ. If case pack, must be multiple of case_size. |
+   275→
+   276→### 5.9 Order
+   277→
+   278→| Aspect | GGH Usage |
+   279→|---|---|
+   280→| **Purpose** | Confirmed purchase after checkout |
+   281→| **Key fields used** | `id`, `display_id`, `customer_id`, `status`, `fulfillment_status`, `payment_status`, `total`, `subtotal`, `metadata` |
+   282→| **GGH metadata** | `metadata.erp_sales_order_id` — ERPNext Sales Order ID after sync |
+   283→| **GGH metadata** | `metadata.delivery_slot_id` — Delivery slot from cart |
+   284→| **GGH metadata** | `metadata.delivery_zone_id` — Zone from cart |
+   285→| **GGH metadata** | `metadata.savings_total` — Total savings vs. retail |
+   286→| **Status flow** | `pending` → `confirmed` → `fulfilling` → `shipped` → `delivered` / `cancelled` / `returned` |
+   287→
+   288→### 5.10 Order Line Item
+   289→
+   290→| Aspect | GGH Usage |
+   291→|---|---|
+   292→| **Purpose** | Individual item in a confirmed order |
+   293→| **Same as cart line item** | Plus: `metadata.erp_item_code` — ERP SKU for reconciliation |
+   294→| **Immutable after order** | Line items are never modified after order creation. Quantity changes go through return/exchange. |
+   295→
+   296→### 5.11 Inventory Item and Inventory Level
+   297→
+   298→| Aspect | GGH Usage |
+   299→|---|---|
+   300→| **Purpose** | Track available stock per variant per location |
+   301→| **Key fields used** | `inventory_item.id`, `inventory_item.sku`, `inventory_level.stocked_quantity`, `inventory_level.reserved_quantity`, `inventory_level.stock_location_id` |
+   302→| **Available quantity** | `stocked_quantity - reserved_quantity` — calculated at query time |
+   303→| **Stock locations** | "Cairo Central", "Giza Hub", "6th October Depot" — created as Stock Locations in Medusa |
+   304→| **Synced from** | ERPNext Stock Ledger Entry (every 5 minutes) |
+   305→
+   306→---
+   307→
+   308→## 6. GGH Custom Entities
+   309→
+   310→These entities live in the `ggh` schema and are managed by GGH migration scripts.
+   311→
+   312→### 6.1 Delivery Zone
+   313→
+   314→| Field | Type | Purpose |
+   315→|---|---|---|
+   316→| `id` | UUID | Primary key |
+   317→| `name_en` | TEXT | English zone name (e.g., "Cairo Central") |
+   318→| `name_ar` | TEXT | Arabic zone name (e.g., "القاهرة الوسطى") |
+   319→| `regions_data` | JSONB | Array of areas/postal codes: `[{"area": "Maadi", "postal_codes": ["11431"]}]` |
+   320→| `base_rate_amount` | INTEGER | Base shipping rate in piastres |
+   321→| `free_delivery_above_amount` | INTEGER | Free delivery above this order total (piastres). NULL = no free delivery. |
+   322→| `estimated_delivery_days` | INTEGER | Business days for delivery |
+   323→| `is_active` | BOOLEAN | Whether this zone is currently accepting orders |
+   324→| `sort_order` | INTEGER | Display order in zone picker |
+   325→| `created_at` | TIMESTAMPTZ | Creation timestamp |
+   326→| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+   327→| `deleted_at` | TIMESTAMPTZ | Soft delete timestamp |
+   328→
+   329→**Constraints:**
+   330→- `name_en` is unique (among non-deleted zones)
+   331→- `name_ar` is unique (among non-deleted zones)
+   332→- `base_rate_amount` must be ≥ 0
+   333→- `free_delivery_above_amount` must be > 0 if not NULL
+   334→
+   335→**Initial Zones:**
+   336→
+   337→| name_en | name_ar | base_rate | free_above |
+   338→|---|---|---|---|
+   339→| Cairo Central | القاهرة الوسطى | 3500 (EGP 35) | 150000 (EGP 1,500) |
+   340→| Cairo Suburbs | ضواحي القاهرة | 5000 (EGP 50) | 200000 (EGP 2,000) |
+   341→| Giza | الجيزة | 4500 (EGP 45) | 180000 (EGP 1,800) |
+   342→| 6th October | السادس من أكتوبر | 5500 (EGP 55) | 200000 (EGP 2,000) |
+   343→| Alexandria | الإسكندرية | 8000 (EGP 80) | 300000 (EGP 3,000) |
+   344→
+   345→### 6.2 Delivery Slot
+   346→
+   347→| Field | Type | Purpose |
+   348→|---|---|---|
+   349→| `id` | UUID | Primary key |
+   350→| `zone_id` | UUID | Foreign key → `ggh.delivery_zone` |
+   351→| `day_of_week` | SMALLINT | 0 = Sunday (Egypt work week starts Sunday) |
+   352→| `start_time` | TIME | Slot start (e.g., 10:00) |
+   353→| `end_time` | TIME | Slot end (e.g., 14:00) |
+   354→| `label_en` | TEXT | Display label: "Sunday 10 AM – 2 PM" |
+   355→| `label_ar` | TEXT | Display label: "الأحد ١٠ ص – ٢ م" |
+   356→| `max_orders_count` | INTEGER | Maximum orders this slot can hold |
+   357→| `current_orders_count` | INTEGER | Currently booked orders |
+   358→| `is_active` | BOOLEAN | Whether this slot is currently available |
+   359→| `created_at` | TIMESTAMPTZ | Creation timestamp |
+   360→| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+   361→| `deleted_at` | TIMESTAMPTZ | Soft delete timestamp |
+   362→
+   363→**Constraints:**
+   364→- Unique combination: `(zone_id, day_of_week, start_time)` among non-deleted slots
+   365→- `max_orders_count` must be > 0
+   366→- `current_orders_count` must be ≥ 0 and ≤ `max_orders_count`
+   367→- `start_time` < `end_time`
+   368→- `day_of_week` must be 0–6
+   369→
+   370→**Typical Slots (per zone):**
+   371→
+   372→| Day | Start | End | Max Orders |
+   373→|---|---|---|---|
+   374→| Sunday | 10:00 | 14:00 | 20 |
+   375→| Sunday | 14:00 | 18:00 | 20 |
+   376→| Monday | 10:00 | 14:00 | 20 |
+   377→| Monday | 14:00 | 18:00 | 20 |
+   378→| Tuesday | 10:00 | 14:00 | 20 |
+   379→| Wednesday | 10:00 | 14:00 | 20 |
+   380→| Wednesday | 14:00 | 18:00 | 20 |
+   381→| Thursday | 10:00 | 14:00 | 20 |
+   382→
+   383→### 6.3 Price Tier
+   384→
+   385→| Field | Type | Purpose |
+   386→|---|---|---|
+   387→| `id` | UUID | Primary key |
+   388→| `variant_id` | TEXT | Reference to `public.product_variant.id` |
+   389→| `tier_name_en` | TEXT | English tier name (e.g., "Wholesale", "Bulk") |
+   390→| `tier_name_ar` | TEXT | Arabic tier name (e.g., "جملة", "كميات كبيرة") |
+   391→| `min_quantity` | INTEGER | Minimum quantity to activate this tier |
+   392→| `max_quantity` | INTEGER | Maximum quantity for this tier. NULL = no upper limit. |
+   393→| `price_amount` | INTEGER | Unit price in piastres at this tier |
+   394→| `currency_code` | TEXT | Always "EGP" |
+   395→| `customer_groups` | JSONB | Array of group IDs allowed this tier. NULL = all groups. |
+   396→| `savings_label_en` | TEXT | "Save 10%" — calculated and stored for display |
+   397→| `savings_label_ar` | TEXT | "وفّر ١٠٪" — Arabic savings label |
+   398→| `is_active` | BOOLEAN | Whether this tier is currently active |
+   399→| `created_at` | TIMESTAMPTZ | Creation timestamp |
+   400→| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+   401→| `deleted_at` | TIMESTAMPTZ | Soft delete timestamp |
+   402→
+   403→**Constraints:**
+   404→- Unique combination: `(variant_id, min_quantity)` among non-deleted tiers
+   405→- `min_quantity` must be > 0
+   406→- `max_quantity` must be > `min_quantity` if not NULL
+   407→- `price_amount` must be > 0
+   408→
+   409→**Example Tiers (Basmati Rice 5kg):**
+   410→
+   411→| tier_name_en | tier_name_ar | min_qty | max_qty | price (piastres) | savings |
+   412→|---|---|---|---|---|---|
+   413→| Retail | قطاعي | 1 | 4 | 12500 (EGP 125) | — |
+   414→| Wholesale | جملة | 5 | 9 | 11000 (EGP 110) | 12% |
+   415→| Bulk | كميات كبيرة | 10 | NULL | 10000 (EGP 100) | 20% |
+   416→
+   417→### 6.4 Order Template
+   418→
+   419→| Field | Type | Purpose |
+   420→|---|---|---|
+   421→| `id` | UUID | Primary key |
+   422→| `customer_id` | TEXT | Reference to `public.customer.id` |
+   423→| `name` | TEXT | Template name (e.g., "Monthly Basics", "Shop Restock") |
+   424→| `items_data` | JSONB | Array: `[{"variant_id": "...", "quantity": 5}]` |
+   425→| `last_used_at` | TIMESTAMPTZ | When this template was last used to create an order |
+   426→| `use_count` | INTEGER | How many times this template has been used |
+   427→| `is_active` | BOOLEAN | Whether the customer has kept this template |
+   428→| `created_at` | TIMESTAMPTZ | Creation timestamp |
+   429→| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+   430→| `deleted_at` | TIMESTAMPTZ | Soft delete timestamp |
+   431→
+   432→**Constraints:**
+   433→- `items_data` must not be empty (at least one item)
+   434→- `use_count` must be ≥ 0
+   435→- Each `variant_id` in `items_data` is validated at application level (exists, is in stock)
+   436→
+   437→### 6.5 Wholesale Account
+   438→
+   439→| Field | Type | Purpose |
+   440→|---|---|---|
+   441→| `id` | UUID | Primary key |
+   442→| `customer_id` | TEXT | Reference to `public.customer.id` (unique) |
+   443→| `business_name` | TEXT | Registered business name |
+   444→| `business_name_ar` | TEXT | Arabic business name |
+   445→| `tax_registration_number` | TEXT | Egyptian tax registration number |
+   446→| `verification_status` | TEXT | "pending", "verified", "rejected", "suspended" |
+   447→| `credit_limit_amount` | INTEGER | Credit limit in piastres. NULL = no credit (COD only). |
+   448→| `credit_used_amount` | INTEGER | Currently used credit in piastres |
+   449→| `payment_terms_days` | INTEGER | Net-N payment terms (e.g., 30 for net-30). NULL = no credit. |
+   450→| `document_urls` | JSONB | Array of uploaded document URLs (commercial register, tax card) |
+   451→| `verified_by` | TEXT | Admin user ID who verified this account |
+   452→| `verified_at` | TIMESTAMPTZ | When verification occurred |
+   453→| `rejection_reason` | TEXT | Why the application was rejected (if applicable) |
+   454→| `created_at` | TIMESTAMPTZ | Application submission timestamp |
+   455→| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+   456→| `deleted_at` | TIMESTAMPTZ | Soft delete timestamp |
+   457→
+   458→**Constraints:**
+   459→- `customer_id` is unique (one wholesale account per customer)
+   460→- `credit_used_amount` must be ≤ `credit_limit_amount` (if both set)
+   461→- `payment_terms_days` must be > 0 if not NULL
+   462→- `verification_status` must be one of: "pending", "verified", "rejected", "suspended"
+   463→
+   464→### 6.6 Delivery Proof
+   465→
+   466→| Field | Type | Purpose |
+   467→|---|---|---|
+   468→| `id` | UUID | Primary key |
+   469→| `order_id` | TEXT | Reference to `public.order.id` (unique) |
+   470→| `weight_photo_url` | TEXT | URL of photo showing items on scale before dispatch |
+   471→| `delivery_photo_url` | TEXT | URL of photo showing items at delivery point |
+   472→| `actual_weight_kg` | DECIMAL(8,2) | Weight recorded at dispatch |
+   473→| `delivered_at` | TIMESTAMPTZ | When delivery was completed |
+   474→| `delivered_to` | TEXT | Name of person who received the delivery |
+   475→| `driver_notes` | TEXT | Any notes from the driver |
+   476→| `created_at` | TIMESTAMPTZ | Record creation timestamp |
+   477→
+   478→**Constraints:**
+   479→- `order_id` is unique (one proof per order)
+   480→- `actual_weight_kg` must be > 0 if not NULL
+   481→
+   482→### 6.7 Notification Preference
+   483→
+   484→| Field | Type | Purpose |
+   485→|---|---|---|
+   486→| `id` | UUID | Primary key |
+   487→| `customer_id` | TEXT | Reference to `public.customer.id` (unique) |
+   488→| `channel` | TEXT | "sms", "whatsapp", "push", "email" |
+   489→| `order_confirmed` | BOOLEAN | Notify when order is confirmed |
+   490→| `order_shipped` | BOOLEAN | Notify when order is shipped |
+   491→| `order_delivered` | BOOLEAN | Notify when order is delivered |
+   492→| `deal_alert` | BOOLEAN | Notify when new deals are available |
+   493→| `price_drop` | BOOLEAN | Notify when wishlist items drop in price |
+   494→| `restock_alert` | BOOLEAN | Notify when out-of-stock items are back |
+   495→| `is_active` | BOOLEAN | Whether any notifications are enabled |
+   496→| `created_at` | TIMESTAMPTZ | Creation timestamp |
+   497→| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+   498→
+   499→**Constraints:**
+   500→- Unique combination: `(customer_id, channel)`
+   501→- Default values: all order notifications TRUE, marketing notifications FALSE
+   502→
+   503→---
+   504→
+   505→## 7. ERP Sync Entities
+   506→
+   507→### 7.1 ERP Sync Log
+   508→
+   509→| Field | Type | Purpose |
+   510→|---|---|---|
+   511→| `id` | UUID | Primary key |
+   512→| `entity_type` | TEXT | What entity was synced: "product", "inventory", "customer", "order", "invoice" |
+   513→| `entity_id` | TEXT | Medusa or ERP entity identifier |
+   514→| `direction` | TEXT | "erp_to_medusa" or "medusa_to_erp" |
+   515→| `status` | TEXT | "success", "conflict", "error" |
+   516→| `medusa_data` | JSONB | Snapshot of Medusa state before sync |
+   517→| `erp_data` | JSONB | Snapshot of ERP state |
+   518→| `error_message` | TEXT | Error details if status is "error" or "conflict" |
+   519→| `job_id` | TEXT | BullMQ job ID for tracing |
+   520→| `attempt_number` | INTEGER | Which retry attempt this was |
+   521→| `duration_ms` | INTEGER | How long the sync operation took |
+   522→| `created_at` | TIMESTAMPTZ | When this log entry was created (immutable) |
+   523→
+   524→**Constraints:**
+   525→- `entity_type` must be one of the defined types
+   526→- `direction` must be "erp_to_medusa" or "medusa_to_erp"
+   527→- `status` must be "success", "conflict", or "error"
+   528→- No `updated_at` — this is an append-only log, never modified
+   529→
+   530→### 7.2 ERP Sync Cursor
+   531→
+   532→| Field | Type | Purpose |
+   533→|---|---|---|
+   534→| `id` | UUID | Primary key |
+   535→| `entity_type` | TEXT | What entity this cursor tracks (unique) |
+   536→| `last_synced_at` | TIMESTAMPTZ | Timestamp of the last successfully synced record |
+   537→| `last_synced_id` | TEXT | ID of the last synced record (for pagination) |
+   538→| `total_synced_count` | INTEGER | Running count of all syncs for this entity |
+   539→| `last_error_at` | TIMESTAMPTZ | When the last error occurred |
+   540→| `last_error_message` | TEXT | What the last error was |
+   541→| `updated_at` | TIMESTAMPTZ | When this cursor was last updated |
+   542→
+   543→**Constraints:**
+   544→- `entity_type` is unique (one cursor per entity type)
+   545→- `total_synced_count` must be ≥ 0
+   546→
+   547→**Initial Cursors:**
+   548→
+   549→| entity_type | last_synced_at |
+   550→|---|---|
+   551→| product | 2026-01-01T00:00:00Z (start from epoch) |
+   552→| inventory | 2026-01-01T00:00:00Z |
+   553→| customer | 2026-01-01T00:00:00Z |
+   554→| invoice | 2026-01-01T00:00:00Z |
+   555→
+   556→### 7.3 Order Status Log
+   557→
+   558→| Field | Type | Purpose |
+   559→|---|---|---|
+   560→| `id` | UUID | Primary key |
+   561→| `order_id` | TEXT | Reference to `public.order.id` |
+   562→| `from_status` | TEXT | Previous status (NULL for initial creation) |
+   563→| `to_status` | TEXT | New status |
+   564→| `trigger` | TEXT | What caused the transition: "customer", "admin", "system", "erp_webhook" |
+   565→| `actor_id` | TEXT | ID of the user or system that triggered the change |
+   566→| `notes` | TEXT | Optional notes about why the status changed |
+   567→| `created_at` | TIMESTAMPTZ | When this transition occurred (immutable) |
+   568→
+   569→**Constraints:**
+   570→- No `updated_at` — append-only
+   571→- `to_status` must be a valid order status
+   572→
+   573→---
+   574→
+   575→## 8. Entity Definitions
+   576→
+   577→### 8.1 Complete Field Reference
+   578→
+   579→#### delivery_zone
+   580→
+   581→| # | Field | Type | Nullable | Default | Notes |
+   582→|---|---|---|---|---|---|
+   583→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   584→| 2 | name_en | TEXT | No | — | Unique among non-deleted |
+   585→| 3 | name_ar | TEXT | No | — | Unique among non-deleted |
+   586→| 4 | regions_data | JSONB | No | '[]' | Area/postal code mapping |
+   587→| 5 | base_rate_amount | INTEGER | No | 0 | Piastres |
+   588→| 6 | free_delivery_above_amount | INTEGER | Yes | NULL | Piastres, NULL = no free delivery |
+   589→| 7 | estimated_delivery_days | INTEGER | No | 2 | Business days |
+   590→| 8 | is_active | BOOLEAN | No | true | — |
+   591→| 9 | sort_order | INTEGER | No | 0 | Display order |
+   592→| 10 | created_at | TIMESTAMPTZ | No | now() | — |
+   593→| 11 | updated_at | TIMESTAMPTZ | No | now() | — |
+   594→| 12 | deleted_at | TIMESTAMPTZ | Yes | NULL | Soft delete |
+   595→
+   596→#### delivery_slot
+   597→
+   598→| # | Field | Type | Nullable | Default | Notes |
+   599→|---|---|---|---|---|---|
+   600→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   601→| 2 | zone_id | UUID | No | — | FK → delivery_zone.id |
+   602→| 3 | day_of_week | SMALLINT | No | — | 0=Sunday through 6=Saturday |
+   603→| 4 | start_time | TIME | No | — | Slot start |
+   604→| 5 | end_time | TIME | No | — | Slot end |
+   605→| 6 | label_en | TEXT | No | — | "Sunday 10 AM – 2 PM" |
+   606→| 7 | label_ar | TEXT | No | — | "الأحد ١٠ ص – ٢ م" |
+   607→| 8 | max_orders_count | INTEGER | No | 20 | Maximum capacity |
+   608→| 9 | current_orders_count | INTEGER | No | 0 | Currently booked |
+   609→| 10 | is_active | BOOLEAN | No | true | — |
+   610→| 11 | created_at | TIMESTAMPTZ | No | now() | — |
+   611→| 12 | updated_at | TIMESTAMPTZ | No | now() | — |
+   612→| 13 | deleted_at | TIMESTAMPTZ | Yes | NULL | Soft delete |
+   613→
+   614→#### price_tier
+   615→
+   616→| # | Field | Type | Nullable | Default | Notes |
+   617→|---|---|---|---|---|---|
+   618→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   619→| 2 | variant_id | TEXT | No | — | Ref → product_variant.id |
+   620→| 3 | tier_name_en | TEXT | No | — | "Retail", "Wholesale", "Bulk" |
+   621→| 4 | tier_name_ar | TEXT | No | — | "قطاعي", "جملة", "كميات كبيرة" |
+   622→| 5 | min_quantity | INTEGER | No | — | Minimum quantity |
+   623→| 6 | max_quantity | INTEGER | Yes | NULL | NULL = no upper limit |
+   624→| 7 | price_amount | INTEGER | No | — | Piastres |
+   625→| 8 | currency_code | TEXT | No | 'EGP' | — |
+   626→| 9 | customer_groups | JSONB | Yes | NULL | NULL = all groups |
+   627→| 10 | savings_label_en | TEXT | Yes | NULL | "Save 10%" |
+   628→| 11 | savings_label_ar | TEXT | Yes | NULL | "وفّر ١٠٪" |
+   629→| 12 | is_active | BOOLEAN | No | true | — |
+   630→| 13 | created_at | TIMESTAMPTZ | No | now() | — |
+   631→| 14 | updated_at | TIMESTAMPTZ | No | now() | — |
+   632→| 15 | deleted_at | TIMESTAMPTZ | Yes | NULL | Soft delete |
+   633→
+   634→#### order_template
+   635→
+   636→| # | Field | Type | Nullable | Default | Notes |
+   637→|---|---|---|---|---|---|
+   638→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   639→| 2 | customer_id | TEXT | No | — | Ref → customer.id |
+   640→| 3 | name | TEXT | No | — | User-given template name |
+   641→| 4 | items_data | JSONB | No | '[]' | [{variant_id, quantity}] |
+   642→| 5 | last_used_at | TIMESTAMPTZ | Yes | NULL | — |
+   643→| 6 | use_count | INTEGER | No | 0 | — |
+   644→| 7 | is_active | BOOLEAN | No | true | — |
+   645→| 8 | created_at | TIMESTAMPTZ | No | now() | — |
+   646→| 9 | updated_at | TIMESTAMPTZ | No | now() | — |
+   647→| 10 | deleted_at | TIMESTAMPTZ | Yes | NULL | Soft delete |
+   648→
+   649→#### wholesale_account
+   650→
+   651→| # | Field | Type | Nullable | Default | Notes |
+   652→|---|---|---|---|---|---|
+   653→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   654→| 2 | customer_id | TEXT | No | — | Ref → customer.id, unique |
+   655→| 3 | business_name | TEXT | No | — | — |
+   656→| 4 | business_name_ar | TEXT | Yes | NULL | — |
+   657→| 5 | tax_registration_number | TEXT | Yes | NULL | — |
+   658→| 6 | verification_status | TEXT | No | 'pending' | pending/verified/rejected/suspended |
+   659→| 7 | credit_limit_amount | INTEGER | Yes | NULL | Piastres, NULL = COD only |
+   660→| 8 | credit_used_amount | INTEGER | No | 0 | Piastres |
+   661→| 9 | payment_terms_days | INTEGER | Yes | NULL | net-30, NULL = no credit |
+   662→| 10 | document_urls | JSONB | No | '[]' | Uploaded document URLs |
+   663→| 11 | verified_by | TEXT | Yes | NULL | Admin user ID |
+   664→| 12 | verified_at | TIMESTAMPTZ | Yes | NULL | — |
+   665→| 13 | rejection_reason | TEXT | Yes | NULL | — |
+   666→| 14 | created_at | TIMESTAMPTZ | No | now() | — |
+   667→| 15 | updated_at | TIMESTAMPTZ | No | now() | — |
+   668→| 16 | deleted_at | TIMESTAMPTZ | Yes | NULL | Soft delete |
+   669→
+   670→#### delivery_proof
+   671→
+   672→| # | Field | Type | Nullable | Default | Notes |
+   673→|---|---|---|---|---|---|
+   674→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   675→| 2 | order_id | TEXT | No | — | Ref → order.id, unique |
+   676→| 3 | weight_photo_url | TEXT | Yes | NULL | — |
+   677→| 4 | delivery_photo_url | TEXT | Yes | NULL | — |
+   678→| 5 | actual_weight_kg | DECIMAL(8,2) | Yes | NULL | — |
+   679→| 6 | delivered_at | TIMESTAMPTZ | Yes | NULL | — |
+   680→| 7 | delivered_to | TEXT | Yes | NULL | Recipient name |
+   681→| 8 | driver_notes | TEXT | Yes | NULL | — |
+   682→| 9 | created_at | TIMESTAMPTZ | No | now() | Immutable |
+   683→
+   684→#### notification_preference
+   685→
+   686→| # | Field | Type | Nullable | Default | Notes |
+   687→|---|---|---|---|---|---|
+   688→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   689→| 2 | customer_id | TEXT | No | — | Ref → customer.id |
+   690→| 3 | channel | TEXT | No | — | sms/whatsapp/push/email |
+   691→| 4 | order_confirmed | BOOLEAN | No | true | — |
+   692→| 5 | order_shipped | BOOLEAN | No | true | — |
+   693→| 6 | order_delivered | BOOLEAN | No | true | — |
+   694→| 7 | deal_alert | BOOLEAN | No | false | — |
+   695→| 8 | price_drop | BOOLEAN | No | false | — |
+   696→| 9 | restock_alert | BOOLEAN | No | false | — |
+   697→| 10 | is_active | BOOLEAN | No | true | — |
+   698→| 11 | created_at | TIMESTAMPTZ | No | now() | — |
+   699→| 12 | updated_at | TIMESTAMPTZ | No | now() | — |
+   700→
+   701→#### erp_sync_log
+   702→
+   703→| # | Field | Type | Nullable | Default | Notes |
+   704→|---|---|---|---|---|---|
+   705→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   706→| 2 | entity_type | TEXT | No | — | product/inventory/customer/order/invoice |
+   707→| 3 | entity_id | TEXT | No | — | Medusa or ERP identifier |
+   708→| 4 | direction | TEXT | No | — | erp_to_medusa / medusa_to_erp |
+   709→| 5 | status | TEXT | No | — | success/conflict/error |
+   710→| 6 | medusa_data | JSONB | Yes | NULL | Snapshot |
+   711→| 7 | erp_data | JSONB | Yes | NULL | Snapshot |
+   712→| 8 | error_message | TEXT | Yes | NULL | — |
+   713→| 9 | job_id | TEXT | Yes | NULL | BullMQ job ID |
+   714→| 10 | attempt_number | INTEGER | No | 1 | — |
+   715→| 11 | duration_ms | INTEGER | Yes | NULL | — |
+   716→| 12 | created_at | TIMESTAMPTZ | No | now() | Immutable, append-only |
+   717→
+   718→#### erp_sync_cursor
+   719→
+   720→| # | Field | Type | Nullable | Default | Notes |
+   721→|---|---|---|---|---|---|
+   722→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   723→| 2 | entity_type | TEXT | No | — | Unique — one cursor per type |
+   724→| 3 | last_synced_at | TIMESTAMPTZ | No | — | — |
+   725→| 4 | last_synced_id | TEXT | Yes | NULL | — |
+   726→| 5 | total_synced_count | INTEGER | No | 0 | Running count |
+   727→| 6 | last_error_at | TIMESTAMPTZ | Yes | NULL | — |
+   728→| 7 | last_error_message | TEXT | Yes | NULL | — |
+   729→| 8 | updated_at | TIMESTAMPTZ | No | now() | — |
+   730→
+   731→#### order_status_log
+   732→
+   733→| # | Field | Type | Nullable | Default | Notes |
+   734→|---|---|---|---|---|---|
+   735→| 1 | id | UUID | No | gen_random_uuid() | Primary key |
+   736→| 2 | order_id | TEXT | No | — | Ref → order.id |
+   737→| 3 | from_status | TEXT | Yes | NULL | NULL = initial creation |
+   738→| 4 | to_status | TEXT | No | — | New status |
+   739→| 5 | trigger | TEXT | No | — | customer/admin/system/erp_webhook |
+   740→| 6 | actor_id | TEXT | Yes | NULL | User or system ID |
+   741→| 7 | notes | TEXT | Yes | NULL | — |
+   742→| 8 | created_at | TIMESTAMPTZ | No | now() | Immutable, append-only |
+   743→
+   744→---
+   745→
+   746→## 9. Relationship Map
+   747→
+   748→### 9.1 One-to-Many Relationships
+   749→
+   750→| Parent | Child | Foreign Key | Cascade |
+   751→|---|---|---|---|
+   752→| delivery_zone | delivery_slot | zone_id | Soft delete children when parent soft-deleted |
+   753→| customer | order_template | customer_id | Soft delete templates when customer soft-deleted |
+   754→| customer | wholesale_account | customer_id | Soft delete account when customer soft-deleted |
+   755→| customer | notification_preference | customer_id | Delete preferences when customer soft-deleted |
+   756→| order | delivery_proof | order_id | Delete proof when order soft-deleted |
+   757→| order | order_status_log | order_id | Keep logs even if order is soft-deleted (audit) |
+   758→| product_variant | price_tier | variant_id | Soft delete tiers when variant soft-deleted |
+   759→
+   760→### 9.2 One-to-One Relationships
+   761→
+   762→| Entity A | Entity B | Relationship |
+   763→|---|---|---|
+   764→| customer | wholesale_account | A customer has at most one wholesale account |
+   765→| order | delivery_proof | An order has at most one delivery proof |
+   766→| customer + channel | notification_preference | A customer has one preference set per channel |
+   767→
+   768→### 9.3 Reference-Only Relationships (No FK Constraint)
+   769→
+   770→These relationships are enforced at the application level, not by database foreign keys, because they cross the `public`/`ggh` schema boundary.
+   771→
+   772→| GGH Table | Medusa Entity | Column | Enforcement |
+   773→|---|---|---|---|
+   774→| price_tier | product_variant | variant_id | Application validates variant exists before insert |
+   775→| order_template | customer | customer_id | Application validates customer exists |
+   776→| wholesale_account | customer | customer_id | Application validates customer exists |
+   777→| delivery_proof | order | order_id | Application validates order exists |
+   778→| erp_sync_log | various | entity_id | Log table — no validation needed |
+   779→| order_status_log | order | order_id | Application validates order exists |
+   780→| notification_preference | customer | customer_id | Application validates customer exists |
+   781→
+   782→---
+   783→
+   784→## 10. Index Strategy
+   785→
+   786→### 10.1 Index Principles
+   787→
+   788→| Principle | Detail |
+   789→|---|---|
+   790→| **Index for query patterns, not structure** | Add an index when a query is slow, not because a column "might be searched." |
+   791→| **Prefer composite indexes** | A single composite index covering multiple WHERE clauses beats multiple single-column indexes. |
+   792→| **Include only what's needed** | Use covering indexes (INCLUDE columns) when the query only needs a few columns. |
+   793→| **Monitor and remove unused indexes** | Every index slows writes. Unused indexes are waste. Check `pg_stat_user_indexes` monthly. |
+   794→| **No indexes on small tables** | Tables under 1000 rows don't need indexes. Sequential scan is faster. |
+   795→
+   796→### 10.2 GGH Index Definitions
+   797→
+   798→#### erp_sync_log
+   799→
+   800→| Index Name | Columns | Type | Purpose |
+   801→|---|---|---|---|
+   802→| `ix_erp_sync_log_entity` | `(entity_type, entity_id)` | B-tree | Find sync history for a specific entity |
+   803→| `ix_erp_sync_log_status_time` | `(status, created_at DESC)` | B-tree | Find recent failures for alerting |
+   804→| `ix_erp_sync_log_created_at` | `(created_at DESC)` | B-tree | Paginate log entries in admin |
+   805→
+   806→#### delivery_slot
+   807→
+   808→| Index Name | Columns | Type | Purpose |
+   809→|---|---|---|---|
+   810→| `ix_delivery_slot_zone_day` | `(zone_id, day_of_week)` | B-tree | Find available slots for a zone on a day |
+   811→| `ix_delivery_slot_active` | `(is_active, zone_id)` | B-tree | Find active slots for a zone |
+   812→
+   813→#### price_tier
+   814→
+   815→| Index Name | Columns | Type | Purpose |
+   816→|---|---|---|---|
+   817→| `ix_price_tier_variant_min` | `(variant_id, min_quantity)` | B-tree | Resolve price tier for a given quantity |
+   818→| `ix_price_tier_variant_active` | `(variant_id, is_active)` | B-tree | Find active tiers for a variant |
+   819→
+   820→#### order_template
+   821→
+   822→| Index Name | Columns | Type | Purpose |
+   823→|---|---|---|---|
+   824→| `ix_order_template_customer` | `(customer_id)` | B-tree | Load a customer's templates |
+   825→
+   826→#### wholesale_account
+   827→
+   828→| Index Name | Columns | Type | Purpose |
+   829→|---|---|---|---|
+   830→| `ix_wholesale_account_customer` | `(customer_id)` | B-tree | Find account by customer |
+   831→| `ix_wholesale_account_status` | `(verification_status)` | B-tree | Find pending accounts for admin review |
+   832→
+   833→#### delivery_proof
+   834→
+   835→| Index Name | Columns | Type | Purpose |
+   836→|---|---|---|---|
+   837→| `ix_delivery_proof_order` | `(order_id)` | B-tree | Find proof by order |
+   838→
+   839→#### order_status_log
+   840→
+   841→| Index Name | Columns | Type | Purpose |
+   842→|---|---|---|---|
+   843→| `ix_order_status_log_order` | `(order_id, created_at DESC)` | B-tree | Get status history for an order |
+   844→| `ix_order_status_log_status` | `(to_status, created_at DESC)` | B-tree | Find orders in a specific status |
+   845→
+   846→#### notification_preference
+   847→
+   848→| Index Name | Columns | Type | Purpose |
+   849→|---|---|---|---|
+   850→| `ix_notif_pref_customer_channel` | `(customer_id, channel)` | B-tree | Find preference by customer and channel |
+   851→
+   852→### 10.3 Medusa Index Considerations
+   853→
+   854→Medusa creates its own indexes. Do not add indexes to Medusa tables. If a Medusa query is slow:
+   855→
+   856→1. Check if Medusa's built-in index covers the query
+   857→2. If not, add the index through a Medusa migration (not directly)
+   858→3. Document the addition in `infra/migrations/medusa/README.md`
+   859→
+   860→---
+   861→
+   862→## 11. Data Integrity Rules
+   863→
+   864→### 11.1 Application-Level Constraints
+   865→
+   866→These rules are enforced in the application layer (API routes, Medusa workflows), not by database constraints, because they involve cross-service or business logic that SQL cannot express.
+   867→
+   868→| Rule | Table(s) | Enforcement |
+   869→|---|---|---|
+   870→| Minimum order value (B2C ≥ EGP 500, B2B ≥ EGP 2,000) | cart → order | Validated in checkout API route before completing cart |
+   871→| Variant MOQ enforcement | cart_line_item | Validated when adding to cart and at checkout |
+   872→| Case-pack quantity must be multiple of case_size | cart_line_item | Validated when setting quantity |
+   873→| Delivery slot availability | delivery_slot | Checked and atomically incremented at checkout |
+   874→| Customer group → price tier access | price_tier.customer_groups | Validated when calculating price |
+   875→| Credit limit not exceeded | wholesale_account | Validated before confirming order for net-30 customers |
+   876→| ERP sync idempotency | erp_sync_log | Same entity_type + entity_id + direction within 5 minutes → skip duplicate |
+   877→
+   878→### 11.2 Database-Level Constraints
+   879→
+   880→| Table | Constraint | Type |
+   881→|---|---|---|
+   882→| delivery_zone | `name_en` unique where `deleted_at IS NULL` | Partial unique index |
+   883→| delivery_zone | `name_ar` unique where `deleted_at IS NULL` | Partial unique index |
+   884→| delivery_zone | `base_rate_amount ≥ 0` | CHECK |
+   885→| delivery_slot | `(zone_id, day_of_week, start_time)` unique where `deleted_at IS NULL` | Partial unique index |
+   886→| delivery_slot | `0 ≤ current_orders_count ≤ max_orders_count` | CHECK |
+   887→| delivery_slot | `start_time < end_time` | CHECK |
+   888→| delivery_slot | `day_of_week BETWEEN 0 AND 6` | CHECK |
+   889→| price_tier | `(variant_id, min_quantity)` unique where `deleted_at IS NULL` | Partial unique index |
+   890→| price_tier | `min_quantity > 0` | CHECK |
+   891→| price_tier | `max_quantity > min_quantity OR max_quantity IS NULL` | CHECK |
+   892→| price_tier | `price_amount > 0` | CHECK |
+   893→| wholesale_account | `customer_id` unique where `deleted_at IS NULL` | Partial unique index |
+   894→| wholesale_account | `credit_used_amount ≤ credit_limit_amount OR credit_limit_amount IS NULL` | CHECK |
+   895→| wholesale_account | `verification_status IN ('pending','verified','rejected','suspended')` | CHECK |
+   896→| erp_sync_log | `direction IN ('erp_to_medusa','medusa_to_erp')` | CHECK |
+   897→| erp_sync_log | `status IN ('success','conflict','error')` | CHECK |
+   898→| erp_sync_cursor | `entity_type` unique | UNIQUE |
+   899→| order_status_log | `to_status` not empty | CHECK |
+   900→| notification_preference | `(customer_id, channel)` unique | UNIQUE |
+   901→
+   902→---
+   903→
+   904→## 12. Soft Delete Strategy
+   905→
+   906→### 12.1 Rules
+   907→
+   908→| Rule | Detail |
+   909→|---|---|
+   910→| **All GGH tables use soft delete** | Every table has `deleted_at TIMESTAMPTZ NULL`. Deleted records have a timestamp; active records have NULL. |
+   911→| **No physical deletion** | Records are never removed with DELETE. Only UPDATE SET deleted_at = now(). |
+   912→| **Unique constraints exclude soft-deleted** | All unique constraints use `WHERE deleted_at IS NULL` to allow re-creation after soft delete. |
+   913→| **Queries filter by default** | All application queries include `WHERE deleted_at IS NULL`. Use a base scope or middleware. |
+   914→| **Hard delete after 90 days** | A scheduled job permanently removes records soft-deleted more than 90 days ago. |
+   915→| **Log tables have no soft delete** | `erp_sync_log` and `order_status_log` are append-only. They are never soft- or hard-deleted. |
+   916→
+   917→### 12.2 Soft Delete Cascade
+   918→
+   919→When a parent record is soft-deleted, related records are also soft-deleted:
+   920→
+   921→| Parent | Children Soft-Deleted |
+   922→|---|---|
+   923→| delivery_zone | All delivery_slots in this zone |
+   924→| customer | All order_templates, wholesale_account, notification_preferences |
+   925→
+   926→**Implementation:** Performed in a Medusa workflow or API route, not by a database trigger. Triggers create hidden coupling.
+   927→
+   928→---
+   929→
+   930→## 13. Money Handling
+   931→
+   932→### 13.1 Storage Rules
+   933→
+   934→| Rule | Detail |
+   935→|---|---|
+   936→| **All money is stored in piastres** | EGP 125.50 → `12550`. EGP 0.00 → `0`. |
+   937→| **Column type is INTEGER** | Not DECIMAL, not NUMERIC, not FLOAT. Integer arithmetic is exact. |
+   938→| **No negative amounts** | All amount columns have a CHECK constraint ≥ 0. Refunds are tracked separately, not as negative amounts. |
+   939→| **Currency is always EGP** | The `currency_code` column exists for future-proofing but is always "EGP" in practice. |
+   940→| **Display conversion happens at render time** | `formatEGP(12550)` → "125.50 ج.م". The database never stores formatted strings. |
+   941→
+   942→### 13.2 Money Columns in GGH Tables
+   943→
+   944→| Table | Column | Meaning |
+   945→|---|---|---|
+   946→| delivery_zone | base_rate_amount | Shipping rate in piastres |
+   947→| delivery_zone | free_delivery_above_amount | Order threshold for free delivery |
+   948→| price_tier | price_amount | Unit price in piastres |
+   949→| wholesale_account | credit_limit_amount | Credit limit in piastres |
+   950→| wholesale_account | credit_used_amount | Used credit in piastres |
+   951→
+   952→### 13.3 Money Columns in Medusa Tables (Read-Only)
+   953→
+   954→| Table | Column | Meaning |
+   955→|---|---|---|
+   956→| price | amount | Unit price in piastres |
+   957→| order | total | Order total in piastres |
+   958→| order | subtotal | Order subtotal in piastres |
+   959→| order | shipping_total | Shipping cost in piastres |
+   960→| order | discount_total | Discount amount in piastres |
+   961→| order_line_item | unit_price | Line item unit price in piastres |
+   962→| order_line_item | subtotal | Line item subtotal in piastres |
+   963→| cart_line_item | unit_price | Cart item unit price in piastres |
+   964→| refund | amount | Refund amount in piastres |
+   965→
+   966→---
+   967→
+   968→## 14. Localization Storage
+   969→
+   970→### 14.1 Bilingual Field Strategy
+   971→
+   972→Every user-facing text is stored in both languages as paired columns:
+   973→
+   974→| Pattern | Example |
+   975→|---|---|
+   976→| `name_en` / `name_ar` | delivery_zone: "Cairo Central" / "القاهرة الوسطى" |
+   977→| `label_en` / `label_ar` | delivery_slot: "Sunday 10 AM – 2 PM" / "الأحد ١٠ ص – ٢ م" |
+   978→| `tier_name_en` / `tier_name_ar` | price_tier: "Wholesale" / "جملة" |
+   979→| `savings_label_en` / `savings_label_ar` | price_tier: "Save 10%" / "وفّر ١٠٪" |
+   980→| `business_name` / `business_name_ar` | wholesale_account: "Ahmed Trading" / "أحمد للتجارة" |
+   981→
+   982→### 14.2 Medusa Metadata for Localization
+   983→
+   984→Medusa does not natively support bilingual fields. GGH stores Arabic text in the `metadata` JSONB column:
+   985→
+   986→| Medusa Entity | Metadata Key | Example |
+   987→|---|---|---|
+   988→| product | `metadata.name_ar` | "أرز بسمتي الدوحة" |
+   989→| product_category | `metadata.name_ar` | "أرز وحبوب" |
+   990→| product_category | `metadata.icon_emoji` | "🍚" |
+   991→| product | `metadata.brand` | "Al Doha" |
+   992→| customer | `metadata.preferred_locale` | "ar" |
+   993→
+   994→### 14.3 Rules
+   995→
+   996→| Rule | Detail |
+   997→|---|---|
+   998→| **Both languages are always present** | CI validates that no GGH table has `_en` without `_ar` and vice versa. |
+   999→| **Arabic text is Egyptian Arabic** | Category names use common Egyptian terms, not formal MSA. "مكرونة" not "معكرونة". |
+  1000→| **Numbers in labels use Eastern Arabic numerals** | Delivery slot labels: "١٠ ص" not "10 AM". But prices use Western numerals: "125 ج.م" not "١٢٥ ج.م". |
+  1001→| **No machine translation in the database** | All `_ar` fields are written by Arabic-speaking team members. |
+  1002→
+  1003→---
+  1004→
+  1005→## 15. Audit & Timestamps
+  1006→
+  1007→### 15.1 Timestamp Rules
+  1008→
+  1009→| Table Type | Timestamps | Mutable? |
+  1010→|---|---|---|
+  1011→| Entity tables (delivery_zone, etc.) | `created_at`, `updated_at`, `deleted_at` | `updated_at` updated on every change. `deleted_at` set on soft delete. |
+  1012→| Log tables (erp_sync_log, order_status_log) | `created_at` only | Immutable. Never updated or deleted. |
+  1013→| Cursor table (erp_sync_cursor) | `updated_at` | Updated after every successful sync. |
+  1014→
+  1015→### 15.2 Audit Trail
+  1016→
+  1017→| Event | Audit Source |
+  1018→|---|---|
+  1019→| Product created/updated/deleted | Medusa's built-in audit log |
+  1020→| Order status changed | `ggh.order_status_log` |
+  1021→| ERP sync attempt | `ggh.erp_sync_log` |
+  1022→| Customer verified | `ggh.wholesale_account.verified_by` + `verified_at` |
+  1023→| Delivery slot count changed | Application-level logging (slot increment is atomic) |
+  1024→| Price tier changed | `ggh.price_tier.updated_at` + application-level change log |
+  1025→
+  1026→### 15.3 No Triggers
+  1027→
+  1028→GGH does not use database triggers. All audit logging and derived updates happen in the application layer. Reasons:
+  1029→
+  1030→1. Triggers are invisible — a developer reading the code cannot see the side effect
+  1031→2. Triggers are hard to test — they require database-level integration tests
+  1032→3. Triggers are hard to debug — they don't appear in application logs
+  1033→4. Triggers create coupling — the database knows about business rules
+  1034→
+  1035→---
+  1036→
+  1037→## 16. Migration Strategy
+  1038→
+  1039→### 16.1 Medusa Migrations
+  1040→
+  1041→| Rule | Detail |
+  1042→|---|---|
+  1043→| **Never modify Medusa migrations** | Run `medusa db:migrate` to apply. Never edit existing migration files. |
+  1044→| **Custom Medusa migrations** | If GGH needs to add a column to a Medusa table, create a new migration file in Medusa's migration directory. |
+  1045→| **Test on staging first** | Run all migrations on a staging database before production. |
+  1046→| **Backup before migration** | Take a PostgreSQL dump before running migrations in production. |
+  1047→
+  1048→### 16.2 GGH Migrations
+  1049→
+  1050→| Rule | Detail |
+  1051→|---|---|
+  1052→| **Numbered migration files** | `001_create_delivery_zone.sql`, `002_create_delivery_slot.sql`, etc. |
+  1053→| **Each migration is reversible** | Every migration has an `UP` (create) and `DOWN` (revert) section. |
+  1054→| **Migrations are idempotent** | Check if the table/column already exists before creating. |
+  1055→| **No data modification in migrations** | Schema changes only. Data seeding uses `scripts/seed/`. |
+  1056→| **Run in order** | Migration runner executes files in numerical order. Never skip a number. |
+  1057→
+  1058→### 16.3 Migration File Template
+  1059→
+  1060→```
+  1061→-- Migration: 001_create_delivery_zone
+  1062→-- Created: 2026-07-19
+  1063→-- Author: GGH Team
+  1064→-- Description: Create delivery_zone table for shipping zone management
+  1065→
+  1066→-- UP
+  1067→CREATE TABLE IF NOT EXISTS ggh.delivery_zone ( ... );
+  1068→CREATE INDEX IF NOT EXISTS ... ;
+  1069→
+  1070→-- DOWN
+  1071→DROP INDEX IF EXISTS ... ;
+  1072→DROP TABLE IF EXISTS ggh.delivery_zone;
+  1073→```
+  1074→
+  1075→---
+  1076→
+  1077→## 17. Backup & Recovery
+  1078→
+  1079→### 17.1 Backup Schedule
+  1080→
+  1081→| Type | Frequency | Retention | Tool |
+  1082→|---|---|---|---|
+  1083→| Full dump | Daily at 03:00 UTC | 30 days | `pg_dump` |
+  1084→| WAL archiving | Continuous | 7 days | PostgreSQL WAL |
+  1085→| Snapshot (if cloud) | Daily at 04:00 UTC | 14 days | Cloud provider snapshot |
+  1086→
+  1087→### 17.2 Recovery Time Objectives
+  1088→
+  1089→| Scenario | RTO | RPO | Method |
+  1090→|---|---|---|---|
+  1091→| Single table drop | 15 minutes | 0 (WAL replay) | Point-in-time recovery |
+  1092→| Full database loss | 1 hour | ≤ 24 hours | Restore from latest dump + WAL replay |
+  1093→| Data corruption (detected within 1h) | 30 minutes | ≤ 1 hour | Point-in-time recovery to before corruption |
+  1094→| Data corruption (detected after 24h) | 4 hours | ≤ 24 hours | Restore from dump + manual reconciliation |
+  1095→
+  1096→### 17.3 Backup Verification
+  1097→
+  1098→| Check | Frequency | Method |
+  1099→|---|---|---|
+  1100→| Backup file exists and is non-empty | Every run | Script checks file size > 0 |
+  1101→| Backup is restorable | Weekly | Restore to a test database, run integrity checks |
+  1102→| GGH schema is present | Weekly | Verify `ggh.delivery_zone` exists in restored backup |
+  1103→| Row counts match | Weekly | Compare row counts on key tables between live and restored |
+  1104→
+  1105→---
+  1106→
+  1107→*This document is the single source of truth for the database structure. When adding a new table, follow the naming conventions, add it to the correct schema, include all required timestamp and soft-delete columns, and update this document in the same PR.*
+  1108→
+  1109→*Last updated: July 2026*
+  1110→

@@ -1,8 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// GGH — Gomla Go Home (جملة لحد البيت)
+// Database Schema — All entities for the wholesale grocery platform
+// Money stored as integer piastres (EGP 14.50 = 1450)
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +11,493 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ============================================
+// AUTHENTICATION & IDENTITY
+// ============================================
+
+model Customer {
+  id            String    @id @default(cuid())
+  phone         String    @unique
+  email         String    @unique @default("")
+  firstName     String    @default("")
+  lastName      String    @default("")
+  nameAr        String    @default("")
+  preferredLang String    @default("ar")
+  wholesaleStatus String  @default("retail") // retail | wholesale | vip
+  avatarUrl     String?
+  isVerified    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+
+  // Relations
+  addresses     Address[]
+  orders        Order[]
+  cartItems     CartItem[]
+  wishlists     Wishlist[]
+  orderTemplates OrderTemplate[]
+  reviews       Review[]
+  otpCodes      OtpCode[]
+  sessions      Session[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  @@map("customers")
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+model OtpCode {
+  id         String   @id @default(cuid())
+  phone      String
+  code       String
+  attempts   Int      @default(0)
+  verified   Boolean  @default(false)
+  expiresAt  DateTime
+  customerId String?
+
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  @@index([phone, code])
+  @@map("otp_codes")
 }
+
+model Session {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  customerId  String
+  deviceInfo  String   @default("")
+  ipAddress   String   @default("")
+  expiresAt   DateTime
+  isActive    Boolean  @default(true)
+  customer    Customer @relation(fields: [customerId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([token])
+  @@index([customerId])
+  @@map("sessions")
+}
+
+// ============================================
+// PRODUCT CATALOG
+// ============================================
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  nameEn      String
+  nameAr      String
+  descriptionEn String  @default("")
+  descriptionAr String  @default("")
+  icon        String    @default("")
+  color       String    @default("#F5F5F5")
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  parentId    String?
+
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  @@map("categories")
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  handle          String    @unique
+  nameEn          String
+  nameAr          String
+  descriptionEn   String    @default("")
+  descriptionAr   String    @default("")
+  brandEn         String    @default("")
+  brandAr         String    @default("")
+  weight          String    @default("")
+  unit            String    @default("piece") // piece, kg, liter, pack
+  barcode         String?
+  todayPrice      Int       @default(0) // piastres
+  yesterdayPrice  Int?      // piastres
+  wholesalePrice  Int?      // piastres
+  costPrice       Int?      // piastres
+  compareAtPrice  Int?      // piastres
+  rating          Float     @default(0)
+  reviewCount     Int       @default(0)
+  totalSold       Int       @default(0)
+  stock           Int       @default(0)
+  lowStockThreshold Int     @default(5)
+  icon            String    @default("")
+  imageUrl        String?
+  thumbnailUrl    String?
+  isActive        Boolean   @default(true)
+  isFeatured      Boolean   @default(false)
+  isDeal          Boolean   @default(false)
+  dealEndsAt      DateTime?
+  maxPerOrder     Int       @default(10)
+  minOrderQty     Int       @default(1)
+  categoryId      String
+
+  category        Category  @relation(fields: [categoryId], references: [id])
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  wishlists       Wishlist[]
+  reviews         Review[]
+  productImages   ProductImage[]
+  deals           Deal[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([categoryId])
+  @@index([handle])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([isDeal])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  url       String
+  altEn     String  @default("")
+  altAr     String  @default("")
+  sortOrder Int     @default(0)
+  productId String
+
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// ============================================
+// CART & CHECKOUT
+// ============================================
+
+model CartItem {
+  id         String  @id @default(cuid())
+  customerId String?
+  sessionId  String? // for guest carts
+  productId  String
+  quantity   Int     @default(1)
+  unitPrice  Int     // piastres at time of add
+
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product   @relation(fields: [productId], references: [id])
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([customerId, productId])
+  @@index([customerId])
+  @@index([sessionId])
+  @@map("cart_items")
+}
+
+model Order {
+  id              String    @id @default(cuid())
+  orderNumber     String    @unique
+  customerId      String
+  status          String    @default("pending") // pending, confirmed, processing, packed, out_for_delivery, delivered, cancelled, returned
+  paymentMethod   String    @default("cod") // cod, card, wallet
+  paymentStatus   String    @default("pending") // pending, paid, failed, refunded
+  subtotal        Int       @default(0) // piastres
+  deliveryFee     Int       @default(0) // piastres
+  discountAmount  Int       @default(0) // piastres
+  totalAmount     Int       @default(0) // piastres
+  notes           String    @default("")
+
+  // Delivery info
+  deliveryAddressId String?
+  deliveryAddressSnapshot String @default("") // JSON snapshot
+  deliverySlot    String    @default("") // e.g., "morning", "afternoon", "evening"
+  deliveryDate    DateTime?
+  deliveredAt     DateTime?
+
+  // Driver info
+  driverId        String?
+  driverName      String    @default("")
+  driverPhone     String    @default("")
+
+  // ERP sync
+  erpSalesOrder   String    @default("") // ERPNext Sales Order ID
+  erpSyncStatus   String    @default("pending") // pending, synced, failed
+  erpSyncedAt     DateTime?
+
+  customer        Customer   @relation(fields: [customerId], references: [id])
+  items           OrderItem[]
+  statusHistory   OrderStatusHistory[]
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([orderNumber])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String
+  productNameEn String
+  productNameAr String
+  brandEn     String  @default("")
+  brandAr     String  @default("")
+  weight      String  @default("")
+  icon        String  @default("")
+  quantity    Int
+  unitPrice   Int     // piastres
+  totalPrice  Int     // piastres
+
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String   @id @default(cuid())
+  orderId   String
+  status    String
+  note      String   @default("")
+  changedBy String   @default("system") // system, customer, admin, driver
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ============================================
+// ADDRESSES
+// ============================================
+
+model Address {
+  id            String   @id @default(cuid())
+  customerId    String
+  label         String   @default("home") // home, work, other
+  addressLine1  String
+  addressLine2  String   @default("")
+  city          String   @default("Cairo")
+  area          String   @default("") // e.g., "Nasr City", "Maadi"
+  buildingNo    String   @default("")
+  floorNo       String   @default("")
+  apartmentNo   String   @default("")
+  landmark      String   @default("") // nearest landmark
+  latitude      Float?
+  longitude     Float?
+  deliveryZone  String   @default("")
+  isDefault     Boolean  @default(false)
+  deliveryInstructions String @default("")
+
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@index([customerId])
+  @@map("addresses")
+}
+
+// ============================================
+// WISHLISTS & REVIEWS
+// ============================================
+
+model Wishlist {
+  id         String  @id @default(cuid())
+  customerId String
+  productId  String
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, productId])
+  @@map("wishlists")
+}
+
+model Review {
+  id         String  @id @default(cuid())
+  customerId String
+  productId  String
+  rating     Int     // 1-5
+  commentEn  String  @default("")
+  commentAr  String  @default("")
+  isVerified Boolean @default(false)
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([productId])
+  @@index([customerId])
+  @@map("reviews")
+}
+
+// ============================================
+// ORDER TEMPLATES (Reorder)
+// ============================================
+
+model OrderTemplate {
+  id          String  @id @default(cuid())
+  customerId  String
+  nameEn      String  @default("My Template")
+  nameAr      String  @default("قوالبي")
+  isDefault   Boolean @default(false)
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items       OrderTemplateItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("order_templates")
+}
+
+model OrderTemplateItem {
+  id         String  @id @default(cuid())
+  templateId String
+  productId  String
+  quantity   Int     @default(1)
+
+  template   OrderTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@map("order_template_items")
+}
+
+// ============================================
+// DELIVERY ZONES
+// ============================================
+
+model DeliveryZone {
+  id          String  @id @default(cuid())
+  nameEn      String
+  nameAr      String
+  area        String
+  city        String  @default("Cairo")
+  deliveryFee Int     @default(0) // piastres
+  minOrder    Int     @default(0) // piastres
+  estimatedHours Int  @default(24) // hours
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("delivery_zones")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id          String   @id @default(cuid())
+  customerId  String
+  titleEn     String
+  titleAr     String
+  bodyEn      String
+  bodyAr      String
+  type        String   @default("info") // info, order, deal, system
+  isRead      Boolean  @default(false)
+  actionUrl   String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, isRead])
+  @@map("notifications")
+}
+
+// ============================================
+// DEALS & PROMOTIONS
+// ============================================
+
+model Deal {
+  id            String    @id @default(cuid())
+  productId     String
+  dealPrice     Int       // piastres
+  originalPrice Int       // piastres
+  discountPercent Int     // calculated
+  startsAt      DateTime
+  endsAt        DateTime
+  maxQuantity   Int       @default(100)
+  claimedCount  Int       @default(0)
+  isActive      Boolean   @default(true)
+
+  product       Product   @relation(fields: [productId], references: [id])
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([isActive, endsAt])
+  @@map("deals")
+}
+
+// ============================================
+// WAREHOUSE & LOGISTICS (from 09_Location_Logistics)
+// ============================================
+
+model Warehouse {
+  id          String  @id @default(cuid())
+  nameEn      String
+  nameAr      String
+  address     String
+  city        String  @default("Cairo")
+  area        String
+  latitude    Float
+  longitude   Float
+  phone       String
+  isActive    Boolean @default(true)
+  capacity    Int     @default(0) // max SKU count
+  currentLoad Int     @default(0)
+
+  drivers     Driver[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("warehouses")
+}
+
+model Driver {
+  id          String  @id @default(cuid())
+  nameEn      String
+  nameAr      String
+  phone       String  @unique
+  warehouseId String?
+  vehicleType String  @default("motorcycle") // motorcycle, car, van, truck
+  vehiclePlate String @default("")
+  isActive    Boolean @default(true)
+  isAvailable Boolean @default(true)
+  rating      Float   @default(5.0)
+  totalDeliveries Int @default(0)
+
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("drivers")
+}
+
+// Add Warehouse relation to existing model
+// Warehouse has many Drivers (defined above)
