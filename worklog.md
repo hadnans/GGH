@@ -429,3 +429,52 @@ README Sections Completed:
 17. Troubleshooting — Database, ERPNext, maps, auth, general issues with solutions
 18. Production Deployment — Docker, environment, security, monitoring, Caddy gateway
 19. Contributing — Code style, commit conventions, PR process, project-specific guidelines
+
+---
+Task ID: 4
+Agent: Architecture Hardening Developer
+Task: Architecture Hardening — Production-Ready Infrastructure
+
+Work Log:
+- Read existing codebase structure: API routes, lib files, auth helpers, ERP config
+- Created src/lib/logger.ts — Structured logging system with pretty-print (dev) and JSON (prod), trace IDs, user context, timer helper
+- Created src/lib/errors.ts — Centralized error handling: AppError base class + 7 specific error types (NotFound, Validation, Unauthorized, Forbidden, Conflict, RateLimit, Internal), errorResponse helper, apiHandler wrapper
+- Created src/lib/rate-limit.ts — In-memory sliding window rate limiter with 3 pre-configured limiters: authLimiter (10/15min), apiLimiter (60/min), searchLimiter (30/min)
+- Created src/lib/cache.ts — Memory cache with TTL, LRU eviction, getOrSet pattern, 4 pre-configured caches (product 5min, category 10min, geocode 1hr, stock 30sec)
+- Created src/lib/validation.ts — Zod schemas for all API inputs: phone, OTP, pagination, address, checkout, cart, profile, search, products
+- Created src/app/api/health/route.ts — Enhanced health check with database connectivity test, ERP status check, memory usage, version, uptime
+- Created src/middleware.ts — Security headers middleware (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, CSP)
+- Created src/lib/env.ts — Zod-validated environment variables with graceful dev/production handling
+- Refactored 7 API routes with the new infrastructure:
+  1. auth/otp/send — Rate limiting + Zod validation + apiHandler + structured logging
+  2. auth/otp/verify — Rate limiting + Zod validation + apiHandler + structured logging
+  3. checkout — Zod validation + AppError classes + structured logging + timer
+  4. products — Caching + Zod pagination validation + structured logging
+  5. search — Rate limiting + caching + Zod validation + structured logging
+  6. deals — Caching + apiHandler + structured logging
+  7. categories — Caching + apiHandler + structured logging
+
+Key Design Decisions:
+- Logger: pretty-print with colors in dev, JSON structured logs in prod; supports trace IDs and user context for request tracking
+- Errors: AppError hierarchy with isOperational flag distinguishes expected vs unexpected errors; apiHandler wraps routes with try/catch
+- Rate limiting: In-memory sliding window with periodic cleanup; throw-based flow (checkOrThrow) and middleware-style (returns NextResponse or null)
+- Cache: LRU eviction when max size reached; getOrSet pattern eliminates cache stampede; cache keys use colon-separated parts
+- Validation: Zod schemas produce standardized error details in API responses; phone validates Egyptian format
+- Health check: Database tested with SELECT 1; ERP tested with /api/method/ping (5s timeout); returns 503 if unhealthy
+- Middleware: CSP allows unsafe-inline/eval (Next.js requirement), img-src allows data: and https: for external images
+- Env: Validates at import time; throws in production, warns in development; provides defaults for missing optional values
+
+Verification:
+- lint: 0 errors, 154 warnings (all pre-existing at warn level)
+- Health endpoint returns: status, version, uptime, database check (up), ERP check (disabled), memory stats
+- Products endpoint serves cached results (5min TTL)
+- Categories endpoint serves cached results (10min TTL)
+- Deals endpoint serves cached results
+- Search endpoint: rate limited (30/min), cached (2min TTL), Zod validated
+- OTP send: rate limited (10/15min), Zod validated, structured logging
+- OTP verify: rate limited (10/15min), Zod validated, structured logging
+- Validation errors return 400 with Zod field-level error details
+- Bad phone number → 400 with "Invalid Egyptian phone number" detail
+- Short search query → 400 with "Search query must be at least 2 characters" detail
+- No crash errors in dev.log
+- Git committed: feat: architecture hardening — logging, errors, rate limiting, caching, validation, security headers (70f66f5)
