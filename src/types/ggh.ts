@@ -47,8 +47,36 @@ export function multiplyPiastres(piastres: Piastres, multiplier: number): Piastr
   return (piastres * multiplier) as Piastres;
 }
 
-export function sumPiastres(a: Piastres, b: Piastres): Piastres {
-  return (a + b) as Piastres;
+export function sumPiastres(...values: Piastres[]): Piastres {
+  return values.reduce((sum, v) => (sum + v) as Piastres, 0 as Piastres);
+}
+
+/**
+ * Calculate savings in piastres
+ */
+export function calcSavings(today: Piastres, yesterday: Piastres): Piastres {
+  return (yesterday - today) as Piastres;
+}
+
+/**
+ * Check if a price represents free (0 piastres)
+ */
+export function isFree(piastres: Piastres): boolean {
+  return piastres === 0;
+}
+
+/**
+ * Convert EGP number to piastres (alias for toPiastres)
+ */
+export function egpToPiastres(egp: number): Piastres {
+  return Math.round(egp * 100) as Piastres;
+}
+
+/**
+ * Convert piastres to EGP number (alias for fromPiastres)
+ */
+export function piastresToEgp(piastres: Piastres): number {
+  return piastres / 100;
 }
 
 // ============================================

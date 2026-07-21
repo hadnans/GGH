@@ -64,6 +64,9 @@ db/*.db-journal
 # Agent context (temp)
 /agent-ctx/
 
+# Screenshot PNGs at root
+/*.png
+
 # Worklog (temp)
 worklog.md
 
