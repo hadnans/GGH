@@ -233,6 +233,7 @@ model Order {
   customer        Customer   @relation(fields: [customerId], references: [id])
   items           OrderItem[]
   statusHistory   OrderStatusHistory[]
+  assignment      DeliveryAssignment?
 
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -492,6 +493,7 @@ model Driver {
   totalDeliveries Int @default(0)
 
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  assignments DeliveryAssignment[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -499,5 +501,98 @@ model Driver {
   @@map("drivers")
 }
 
-// Add Warehouse relation to existing model
-// Warehouse has many Drivers (defined above)
+// ============================================
+// ERP INTEGRATION
+// ============================================
+
+model ErpSyncLog {
+  id          String   @id @default(cuid())
+  entityType  String   // order, customer, product, stock
+  entityId    String   // GGH entity ID
+  action      String   // create, update, delete, sync
+  erpDocType  String   // Sales Order, Customer, Item, etc.
+  erpDocName  String?  // ERPNext document name
+  status      String   @default("pending") // pending, success, failed
+  request     String?  // JSON payload sent
+  response    String?  // JSON response received
+  error       String?
+  retryCount  Int      @default(0)
+  syncedAt    DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([status])
+  @@map("erp_sync_logs")
+}
+
+// ============================================
+// GEOFENCING
+// ============================================
+
+model Geofence {
+  id          String   @id @default(cuid())
+  nameEn      String
+  nameAr      String
+  type        String   // circle, polygon
+  centerLat   Float?
+  centerLng   Float?
+  radius      Float?   // meters, for circle type
+  points      String   // JSON array of {lat, lng} for polygon type
+  metadata    String   @default("{}") // JSON
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("geofences")
+}
+
+// ============================================
+// GPS POSITION LOGS
+// ============================================
+
+model GpsPositionLog {
+  id           String   @id @default(cuid())
+  entityId     String
+  entityType   String   // driver, vehicle
+  latitude     Float
+  longitude    Float
+  heading      Float    @default(0)
+  speed        Float    @default(0) // km/h
+  accuracy     Float    @default(0) // meters
+  batteryLevel Int?
+  timestamp    DateTime
+
+  @@index([entityId, timestamp])
+  @@index([entityType])
+  @@map("gps_position_logs")
+}
+
+// ============================================
+// DELIVERY ASSIGNMENTS
+// ============================================
+
+model DeliveryAssignment {
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  driverId      String
+  warehouseId   String?
+  status        String   @default("assigned") // assigned, accepted, arrived_pickup, picked_up, arrived_delivery, delivered, failed, cancelled
+  assignedAt    DateTime @default(now())
+  acceptedAt    DateTime?
+  pickedUpAt    DateTime?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  failureReason String?
+  notes         String   @default("")
+
+  order         Order    @relation(fields: [orderId], references: [id])
+  driver        Driver   @relation(fields: [driverId], references: [id])
+
+  @@index([orderId])
+  @@index([driverId])
+  @@index([status])
+  @@map("delivery_assignments")
+}

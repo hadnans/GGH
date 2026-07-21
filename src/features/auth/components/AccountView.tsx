@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Package } from 'lucide-react';
+import { User, Package, Truck, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { type Lang, type CustomerProfile } from '@/types/ggh';
@@ -10,9 +10,10 @@ interface AccountViewProps {
   lang: Lang;
   customer: CustomerProfile | null;
   onLogout: () => void;
+  onNavigate?: (view: string) => void;
 }
 
-export default function AccountView({ lang, customer, onLogout }: AccountViewProps) {
+export default function AccountView({ lang, customer, onLogout, onNavigate }: AccountViewProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
@@ -62,10 +63,39 @@ export default function AccountView({ lang, customer, onLogout }: AccountViewPro
           variant="ghost"
           className="w-full justify-start h-14 text-base rounded-xl"
           style={{ color: 'var(--ggh-text)' }}
+          onClick={() => onNavigate?.('orders')}
         >
           <Package className="size-5 me-3" style={{ color: 'var(--ggh-primary)' }} />
           {t(lang, 'orders')}
         </Button>
+
+        {/* Admin links */}
+        <div
+          className="pt-2 mt-2"
+          style={{ borderTop: '1px solid var(--ggh-border)' }}
+        >
+          <p className="text-xs font-semibold mb-2 px-4" style={{ color: 'var(--ggh-text-secondary)' }}>
+            {lang === 'ar' ? 'أدوات الإدارة' : 'Admin Tools'}
+          </p>
+          <Button
+            variant="ghost"
+            className="w-full justify-start h-14 text-base rounded-xl"
+            style={{ color: 'var(--ggh-text)' }}
+            onClick={() => onNavigate?.('dispatcher')}
+          >
+            <Truck className="size-5 me-3" style={{ color: 'var(--ggh-accent)' }} />
+            {lang === 'ar' ? 'لوحة المراقب' : 'Dispatcher Dashboard'}
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start h-14 text-base rounded-xl"
+            style={{ color: 'var(--ggh-text)' }}
+            onClick={() => onNavigate?.('warehouse')}
+          >
+            <Warehouse className="size-5 me-3" style={{ color: 'var(--ggh-primary)' }} />
+            {lang === 'ar' ? 'لوحة المستودع' : 'Warehouse Dashboard'}
+          </Button>
+        </div>
       </div>
 
       {/* Logout */}

@@ -178,3 +178,49 @@ Stage Summary:
 - 0 lint errors (128 warnings, all pre-existing at warn level)
 - Dev server running successfully, all API routes returning 200
 - 12 unused npm packages removed, lockfile updated
+
+---
+Task ID: 2-a
+Agent: Critical Fix Developer
+Task: Fix Critical Checkout Flow + Refactor page.tsx
+
+Work Log:
+- Fixed CheckoutFlow.tsx: Replaced mock order creation (0 as any for all monetary fields) with real api.checkout() call
+  - Now sends addressId, deliverySlot, deliveryDate, paymentMethod, notes to the API
+  - Uses the real order from the API response instead of fake mock data
+  - Added error handling with toast notifications
+  - Added useQueryClient to invalidate addresses query when new address is added
+  - Added localAddresses state so newly added addresses appear immediately
+- Fixed AddressForm.tsx: Now calls api.addAddress() to persist addresses via the API
+  - Changed onSubmit prop type from Omit<Address, 'id' | 'customerId'> to Address (full address from API response)
+  - Added isSaving state and disabled button during save
+  - Added error handling with toast notifications
+  - Parent (CheckoutFlow) receives the full Address object including the server-generated id
+- Fixed WelcomeScreen.tsx: Now calls api.updateProfile() to save the user's name
+  - Added useAuthStore import to update the auth store with the new name
+  - Added error handling with toast notifications
+  - Still navigates to next step even on error (graceful degradation)
+- Fixed api.ts types: Replaced 7 `unknown` return types with proper types
+  - getCart() → ApiResponse<CartSummary>
+  - addToCart() → ApiResponse<CartSummary>
+  - updateCartItem() → ApiResponse<CartSummary>
+  - removeCartItem() → ApiResponse<CartSummary>
+  - getDeliverySlots() → ApiResponse<DeliverySlot[]>
+  - getProfile() → ApiResponse<CustomerProfile>
+  - updateProfile() → ApiResponse<CustomerProfile> (param changed from Record<string, unknown> to Partial<CustomerProfile>)
+- Refactored page.tsx (770→~250 lines): Extracted 4 view components
+  - ShopView → src/features/shop/components/ShopView.tsx (hero, categories, deals, featured, product sections)
+  - OrdersView → src/features/order/components/OrdersView.tsx (order list with empty state)
+  - AccountView → src/features/auth/components/AccountView.tsx (profile card, menu, logout)
+  - SearchOverlay → src/features/search/components/SearchOverlay.tsx (search dialog with results)
+  - page.tsx is now a thin orchestrator: view state, dialog state, data fetching, layout
+- Protected seed endpoint: Added production guard to /api/seed route (403 if NODE_ENV=production)
+- Fixed api/route.ts health check: Replaced "Hello, world!" with proper health check response (status, service, version, timestamp)
+
+Verification:
+- lint: 0 errors, 115 warnings (all pre-existing at warn level)
+- API health check returns proper JSON with status/service/version/timestamp
+- All API routes returning 200 (categories, products, deals, seed)
+- No crash errors in dev.log after changes
+
+Git Commit: fix: critical checkout flow, address persistence, refactor page.tsx into view components (1cacd9b)

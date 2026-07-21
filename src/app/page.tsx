@@ -32,13 +32,18 @@ import OrdersView from '@/features/order/components/OrdersView';
 import AccountView from '@/features/auth/components/AccountView';
 import SearchOverlay from '@/features/search/components/SearchOverlay';
 
+// Delivery Feature Components
+import TrackingPage from '@/features/delivery/components/TrackingPage';
+import DispatcherDashboard from '@/features/delivery/components/DispatcherDashboard';
+import WarehouseDashboard from '@/features/delivery/components/WarehouseDashboard';
+
 // UI Components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // ============================================
 // VIEWS
 // ============================================
-type AppView = 'shop' | 'checkout' | 'orders' | 'account';
+type AppView = 'shop' | 'checkout' | 'orders' | 'account' | 'tracking' | 'dispatcher' | 'warehouse';
 
 export default function Home() {
   const { lang, isRTL, toggleLang } = useLangStore();
@@ -50,6 +55,7 @@ export default function Home() {
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [seedComplete, setSeedComplete] = useState(false);
+  const [trackingOrderId, setTrackingOrderId] = useState<string>('');
 
   const queryClient = useQueryClient();
   const seededRef = useRef(false);
@@ -266,7 +272,14 @@ export default function Home() {
               transition={{ duration: 0.2 }}
               className="max-w-3xl mx-auto px-4 py-6"
             >
-              <OrdersView lang={lang} orders={orders} />
+              <OrdersView
+                lang={lang}
+                orders={orders}
+                onTrackOrder={(orderId) => {
+                  setTrackingOrderId(orderId);
+                  setCurrentView('tracking');
+                }}
+              />
             </motion.div>
           )}
 
@@ -279,7 +292,58 @@ export default function Home() {
               transition={{ duration: 0.2 }}
               className="max-w-3xl mx-auto px-4 py-6"
             >
-              <AccountView lang={lang} customer={customer} onLogout={handleLogout} />
+              <AccountView
+                lang={lang}
+                customer={customer}
+                onLogout={handleLogout}
+                onNavigate={(view) => setCurrentView(view as AppView)}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'tracking' && trackingOrderId && (
+            <motion.div
+              key="tracking"
+              initial={{ opacity: 0, x: isRTL ? -30 : 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: isRTL ? 30 : -30 }}
+              transition={{ duration: 0.2 }}
+            >
+              <TrackingPage
+                orderId={trackingOrderId}
+                lang={lang}
+                onBack={() => setCurrentView('orders')}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'dispatcher' && (
+            <motion.div
+              key="dispatcher"
+              initial={{ opacity: 0, x: isRTL ? -30 : 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: isRTL ? 30 : -30 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DispatcherDashboard
+                lang={lang}
+                onBack={() => setCurrentView('shop')}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'warehouse' && (
+            <motion.div
+              key="warehouse"
+              initial={{ opacity: 0, x: isRTL ? -30 : 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: isRTL ? 30 : -30 }}
+              transition={{ duration: 0.2 }}
+            >
+              <WarehouseDashboard
+                lang={lang}
+                onBack={() => setCurrentView('shop')}
+              />
             </motion.div>
           )}
         </AnimatePresence>
