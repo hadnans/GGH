@@ -224,3 +224,57 @@ Verification:
 - No crash errors in dev.log after changes
 
 Git Commit: fix: critical checkout flow, address persistence, refactor page.tsx into view components (1cacd9b)
+
+---
+Task ID: 3-a
+Agent: ERP Integration Developer
+Task: Build Production-Ready ERPNext Integration Module
+
+Work Log:
+- Updated Prisma schema with ErpSyncLog model (id, entityType, entityId, action, erpDocType, erpDocName, status, request, response, error, retryCount, syncedAt, timestamps, indexes)
+- Ran db:push to sync new ErpSyncLog table to SQLite database
+- Created src/lib/erp/config.ts — Zod-validated ERPNext env config (ERP_NEXT_URL, ERP_NEXT_API_KEY, ERP_NEXT_API_SECRET), supports disabled mode
+- Created src/lib/erp/client.ts — Native fetch HTTP client with token-based auth, rate limiting (10 req/s), exponential backoff retry, dev-mode logging, typed ErpError mapping
+- Created src/lib/erp/types.ts — 25+ ERPNext document types (ErpItem, ErpCustomer, ErpSalesOrder, ErpPurchaseOrder, ErpDeliveryNote, ErpStockEntry, ErpPaymentEntry, ErpSalesInvoice, ErpWarehouse, ErpSupplier), GGH-side mapped types, webhook/sync/reporting types, Piastres↔EGP helpers
+- Created src/lib/erp/mappers.ts — 10 mapper functions: gghProductToErpItem, gghCustomerToErpCustomer, gghOrderToErpSalesOrder, gghOrderItemsToErpItems, erpSalesOrderToGgh, erpStockBalanceToGgh, erpWarehouseToGgh, erpSalesSummaryToGgh, erpTopSellingItemToGgh, erpProfitReportToGgh
+- Created 10 domain modules in src/lib/erp/modules/:
+  1. inventory.ts — getStockLevels, getStockLedgerEntries, createStockEntry, getReorderLevels, updateReorderLevel
+  2. warehouse.ts — listWarehouses, getWarehouse, createWarehouse, getWarehouseCapacity
+  3. stock-transfer.ts — createStockTransfer, getTransferHistory
+  4. purchase-order.ts — createPurchaseOrder, getPurchaseOrders, receivePurchaseOrder
+  5. sales-order.ts — createSalesOrder, getSalesOrders, updateSalesOrderStatus
+  6. delivery-note.ts — createDeliveryNote, getDeliveryNotes
+  7. supplier.ts — listSuppliers, createSupplier, getSupplierPricing
+  8. customer.ts — syncCustomer, getCustomer, getCustomerByGghId
+  9. accounting.ts — createPaymentEntry, createSalesInvoice, getOutstandingInvoices
+  10. reporting.ts — getSalesSummary, getStockBalance, getTopSellingItems, getProfitReport
+- Created src/lib/erp/sync.ts — Orchestrator with syncOrderToErp, syncAllPendingOrders, syncStockFromErp, syncCustomerToErp, retryFailedSyncs, getSyncStatus; uses ErpSyncLog for audit trail
+- Created src/lib/erp/webhook.ts — verifyWebhookSignature (HMAC-SHA256), handleStockUpdate, handleOrderStatusUpdate, handlePaymentUpdate, routeWebhook; updates GGH database on ERP events
+- Created src/lib/erp/index.ts — Barrel export of all public APIs
+- Created 7 API routes in src/app/api/erp/:
+  1. sync/route.ts — POST: trigger manual sync (orders/stock/customer/all) with Zod validation
+  2. sync/status/route.ts — GET: check sync status (enabled, pending/failed counts, recent logs)
+  3. webhooks/route.ts — POST: receive ERPNext webhooks with signature verification
+  4. inventory/route.ts — GET: stock levels; POST: stock entry creation
+  5. warehouses/route.ts — GET: list warehouses
+  6. sales-orders/route.ts — GET: list synced sales orders with filters
+  7. reports/route.ts — GET: dashboard reports (sales/stock/topSelling/profit)
+
+Key Design Decisions:
+- All ERPNext calls gracefully handle "not configured" state (return null/empty arrays)
+- Native fetch throughout, no external HTTP libraries
+- TypeScript strict mode with zero `any` types
+- All monetary values use Piastres (integer) ↔ EGP (float) conversion
+- Bilingual EN/AR support in all mapper functions
+- JSDoc comments on all exported functions
+- Auth required on all routes except webhooks
+- Zod validation on all request bodies
+- ErpSyncLog model tracks every sync operation for audit and retry
+
+Verification:
+- lint: 0 errors, 157 warnings (all pre-existing at warn level)
+- ERP API routes responding correctly (401 for auth-protected, proper JSON for webhooks)
+- No crash errors in dev.log after changes
+- All files compiled successfully
+
+Git Commit: feat: ERPNext integration module — client, sync, 10 domain modules, API routes (433ed78)
