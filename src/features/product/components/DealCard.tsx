@@ -16,6 +16,7 @@ import {
 import { t } from '@/lib/ggh/i18n';
 import { useCartStore } from '@/stores/cart-store';
 import { useLangStore } from '@/stores/lang-store';
+import { generatePlaceholderThumbnail } from '@/utils/thumbnails';
 import DealTimer from './DealTimer';
 
 interface DealCardProps {
@@ -44,6 +45,16 @@ export default function DealCard({ deal, product: productProp, lang: langProp }:
   const originalPrice = deal?.originalPrice || product.yesterdayPrice || product.todayPrice;
   const endsAt = deal?.endsAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+  // Generate professional SVG placeholder thumbnail
+  const thumbnailSrc = product.imageUrl || product.thumbnailUrl || generatePlaceholderThumbnail({
+    width: 260,
+    height: 200,
+    emoji: product.icon,
+    name: { en: product.nameEn, ar: product.nameAr },
+    categoryId: product.categoryId,
+    lang,
+  });
+
   const handleAdd = () => {
     if (stockRemaining <= 0) return;
     addItem(product);
@@ -59,11 +70,15 @@ export default function DealCard({ deal, product: productProp, lang: langProp }:
         border: '1px solid var(--ggh-border)',
       }}
     >
-      {/* Product icon area */}
-      <div className="flex items-center justify-center py-6 relative">
-        <span className="text-5xl" role="img" aria-label={name}>
-          {product.icon}
-        </span>
+      {/* Product thumbnail area */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: '#F5F5F5', height: '120px' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={thumbnailSrc}
+          alt={name}
+          className="w-full h-full object-contain p-3"
+          loading="lazy"
+        />
 
         {/* Big discount badge */}
         <Badge

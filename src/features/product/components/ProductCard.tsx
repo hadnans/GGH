@@ -9,6 +9,7 @@ import { type Product, type Lang, type Piastres, formatPriceWithCurrency, calcDi
 import { t } from '@/lib/ggh/i18n';
 import { useCartStore } from '@/stores/cart-store';
 import { useLangStore } from '@/stores/lang-store';
+import { generatePlaceholderThumbnail } from '@/utils/thumbnails';
 
 interface ProductCardProps {
   product: Product;
@@ -31,6 +32,16 @@ export default function ProductCard({ product, lang: langProp }: ProductCardProp
   const isOutOfStock = product.stock === 0;
   const isLowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
 
+  // Generate professional SVG placeholder thumbnail when no real image is available
+  const thumbnailSrc = product.imageUrl || product.thumbnailUrl || generatePlaceholderThumbnail({
+    width: 200,
+    height: 200,
+    emoji: product.icon,
+    name: { en: product.nameEn, ar: product.nameAr },
+    categoryId: product.categoryId,
+    lang,
+  });
+
   const handleAdd = () => {
     if (isOutOfStock) return;
     addItem(product);
@@ -43,14 +54,19 @@ export default function ProductCard({ product, lang: langProp }: ProductCardProp
       className="rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white"
       style={{ border: '1px solid var(--ggh-border)' }}
     >
-      {/* Product icon area */}
+      {/* Product thumbnail area */}
       <div
-        className="flex items-center justify-center py-5 relative"
-        style={{ backgroundColor: '#F5F5F5' }}
+        className="relative overflow-hidden"
+        style={{ backgroundColor: '#F5F5F5', height: '140px' }}
       >
-        <span className="text-5xl sm:text-6xl" role="img" aria-label={name}>
-          {product.icon}
-        </span>
+        {/* Auto-generated placeholder thumbnail or real image */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={thumbnailSrc}
+          alt={name}
+          className="w-full h-full object-contain p-3"
+          loading="lazy"
+        />
 
         {/* Discount badge */}
         {discount > 0 && (

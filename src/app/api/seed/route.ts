@@ -307,6 +307,89 @@ export async function POST(_request: NextRequest) {
       }
     }
 
+    // ============================================
+    // Seed Admin User & Role
+    // ============================================
+
+    // Ensure super_admin role exists
+    const superAdminRole = await db.role.upsert({
+      where: { name: 'super_admin' },
+      update: {
+        nameEn: 'Super Admin',
+        nameAr: 'مدير عام',
+        description: 'Full system access with all permissions',
+        isSystem: true,
+      },
+      create: {
+        name: 'super_admin',
+        nameEn: 'Super Admin',
+        nameAr: 'مدير عام',
+        description: 'Full system access with all permissions',
+        isSystem: true,
+      },
+    });
+
+    // Create default admin user
+    const defaultAdminEmail = 'admin@ggh.com';
+    const defaultAdminPassword = 'admin';
+
+    let adminSeeded = false;
+    const existingAdmin = await db.adminUser.findUnique({
+      where: { email: defaultAdminEmail },
+    });
+
+    if (existingAdmin) {
+      // Ensure super_admin role is assigned
+      const existingRole = await db.adminUserRole.findUnique({
+        where: {
+          adminId_roleId: {
+            adminId: existingAdmin.id,
+            roleId: superAdminRole.id,
+          },
+        },
+      });
+
+      if (!existingRole) {
+        await db.adminUserRole.create({
+          data: {
+            adminId: existingAdmin.id,
+            roleId: superAdminRole.id,
+          },
+        });
+      }
+
+      // Update password to match default
+      await db.adminUser.update({
+        where: { id: existingAdmin.id },
+        data: {
+          passwordHash: defaultAdminPassword,
+          isActive: true,
+          nameEn: 'Super Admin',
+          nameAr: 'مدير عام',
+        },
+      });
+    } else {
+      const newAdmin = await db.adminUser.create({
+        data: {
+          email: defaultAdminEmail,
+          passwordHash: defaultAdminPassword,
+          nameEn: 'Super Admin',
+          nameAr: 'مدير عام',
+          phone: '',
+          isActive: true,
+        },
+      });
+
+      await db.adminUserRole.create({
+        data: {
+          adminId: newAdmin.id,
+          roleId: superAdminRole.id,
+        },
+      });
+
+      adminSeeded = true;
+    }
+
     return successResponse({
       categories: CATEGORIES.length,
       productsCreated,
@@ -314,6 +397,12 @@ export async function POST(_request: NextRequest) {
       totalProducts: PRODUCTS.length,
       dealsCreated,
       zonesCreated,
+      adminSeeded,
+      defaultAdmin: {
+        email: defaultAdminEmail,
+        username: 'admin',
+        role: 'super_admin',
+      },
     }, 'Database seeded successfully');
   } catch (err) {
     console.error('Seed error:', err);

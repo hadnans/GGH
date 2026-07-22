@@ -234,7 +234,7 @@ export const POST = apiHandler(async () => {
   // ============================================
 
   const defaultAdminEmail = 'admin@ggh.com';
-  const defaultAdminPassword = 'admin123';
+  const defaultAdminPassword = 'admin';
 
   const existingAdmin = await db.adminUser.findUnique({
     where: { email: defaultAdminEmail },
@@ -307,7 +307,9 @@ export const POST = apiHandler(async () => {
     adminCreated,
     defaultAdmin: {
       email: defaultAdminEmail,
+      username: 'admin',
       role: 'super_admin',
+      note: 'Default credentials: username=admin / password=admin',
     },
   }, 'Admin seed completed successfully');
 });

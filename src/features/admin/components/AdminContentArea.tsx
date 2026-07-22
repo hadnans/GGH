@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Package,
   Grid3X3,
@@ -22,11 +23,13 @@ import {
   Activity,
   Box,
   Award,
+  Loader2,
 } from 'lucide-react';
 
 import { useAdminStore, type AdminSubView } from '@/stores/admin-store';
 import { useLangStore } from '@/stores/lang-store';
 import { t } from '@/lib/ggh/i18n';
+import { formatPriceWithCurrency, type Piastres } from '@/types/ggh';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -170,7 +173,7 @@ export default function AdminContentArea() {
 }
 
 // ============================================
-// ADMIN DASHBOARD (Real implementation)
+// ADMIN DASHBOARD (Real data from API)
 // ============================================
 interface AdminDashboardProps {
   lang: 'en' | 'ar';
@@ -178,37 +181,82 @@ interface AdminDashboardProps {
 }
 
 function AdminDashboard({ lang }: AdminDashboardProps) {
-  // Mock data for the dashboard
-  const stats = useMemo(() => [
+  const { data: dashboardData, isLoading, error } = useQuery({
+    queryKey: ['admin-dashboard'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/dashboard?period=today');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Failed to load dashboard' }));
+        throw new Error(errData.error || 'Failed to load dashboard');
+      }
+      const json = await res.json();
+      return json.data;
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <Loader2 className="size-8 animate-spin text-emerald-600" />
+        <p className="text-sm text-muted-foreground">{t(lang, 'adminLoading')}</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <AlertTriangle className="size-8 text-amber-500" />
+        <p className="text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    );
+  }
+
+  const data = dashboardData;
+  const ordersCount = data?.orders?.count ?? 0;
+  const totalRevenue = data?.orders?.totalRevenue ?? 0;
+  const totalCustomers = data?.totalCustomers ?? 0;
+  const lowStockProducts = data?.lowStockProducts ?? 0;
+  const pendingOrders = data?.pendingOrders ?? 0;
+  const activeDeals = data?.activeDeals ?? 0;
+
+  const stats = [
     {
       titleKey: 'adminTotalOrders',
-      value: '1,247',
-      change: '+12%',
+      value: ordersCount.toLocaleString(),
+      change: pendingOrders > 0 ? `${pendingOrders} pending` : 'No pending',
       icon: ShoppingCart,
       color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30',
     },
     {
       titleKey: 'adminTotalRevenue',
-      value: 'EGP 847K',
-      change: '+8.3%',
+      value: formatPriceWithCurrency(totalRevenue as Piastres, lang),
+      change: 'Today',
       icon: TrendingUp,
       color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
     },
     {
       titleKey: 'adminActiveProducts',
-      value: '342',
-      change: '+5',
+      value: activeDeals.toString(),
+      change: 'Active deals',
       icon: Box,
-      color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30',
+      color: 'text-sky-600 bg-sky-50 dark:bg-sky-950/30',
     },
     {
       titleKey: 'adminActiveCustomers',
-      value: '2,891',
-      change: '+156',
+      value: totalCustomers.toLocaleString(),
+      change: 'Registered',
       icon: Users,
       color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/30',
     },
-  ], []);
+  ];
+
+  // Recent orders from API data
+  const recentOrders = data?.recentOrders ?? [];
+
+  // Top products from API data
+  const topProducts = data?.topProducts ?? [];
 
   return (
     <div className="space-y-6">
@@ -257,7 +305,7 @@ function AdminDashboard({ lang }: AdminDashboardProps) {
         })}
       </div>
 
-      {/* System Health + Recent Activity */}
+      {/* System Health + Low Stock Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* System Health */}
         <Card>
@@ -270,24 +318,35 @@ function AdminDashboard({ lang }: AdminDashboardProps) {
           <CardContent className="space-y-4">
             <HealthItem label="API Server" status="healthy" progress={98} />
             <HealthItem label="Database" status="healthy" progress={95} />
-            <HealthItem label="Redis Cache" status="healthy" progress={92} />
+            <HealthItem label="Session Store" status="healthy" progress={92} />
             <HealthItem label="CDN" status="healthy" progress={100} />
           </CardContent>
         </Card>
 
-        {/* Pending + Low Stock Alerts */}
+        {/* Low Stock Alerts */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <AlertTriangle className="size-4 text-amber-500" />
-              {t(lang, 'adminLowStockAlerts')}
+              {lowStockProducts > 0
+                ? `${lowStockProducts} ${t(lang, 'adminLowStockAlerts')}`
+                : t(lang, 'adminLowStockAlerts')
+              }
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <AlertItem label="Basmati Rice 5kg" count={3} severity="critical" />
-            <AlertItem label="Sunflower Oil 1L" count={8} severity="warning" />
-            <AlertItem label="Pasta Penne 500g" count={12} severity="warning" />
-            <AlertItem label="Sugar 1kg" count={15} severity="info" />
+            {topProducts.length > 0 ? (
+              topProducts.slice(0, 4).map((product: { nameEn: string; nameAr: string; stock: number }) => (
+                <AlertItem
+                  key={product.nameEn}
+                  label={lang === 'ar' ? product.nameAr : product.nameEn}
+                  count={product.stock}
+                  severity={product.stock < 5 ? 'critical' : product.stock < 15 ? 'warning' : 'info'}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">{t(lang, 'adminNoAlerts')}</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -302,24 +361,76 @@ function AdminDashboard({ lang }: AdminDashboardProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[
-              { id: 'ORD-1247', customer: 'Ahmed Hassan', amount: 'EGP 245', status: 'delivered' },
-              { id: 'ORD-1246', customer: 'Fatima Ali', amount: 'EGP 189', status: 'processing' },
-              { id: 'ORD-1245', customer: 'Mohamed Said', amount: 'EGP 567', status: 'pending' },
-              { id: 'ORD-1244', customer: 'Sara Ibrahim', amount: 'EGP 312', status: 'confirmed' },
-            ].map((order) => (
-              <div key={order.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{order.id}</p>
-                  <p className="text-xs text-muted-foreground">{order.customer}</p>
+            {recentOrders.length > 0 ? (
+              recentOrders.map((order: {
+                id: string;
+                orderNumber: string;
+                customerName?: string;
+                customerNameAr?: string;
+                totalAmount: number;
+                status: string;
+              }) => (
+                <div key={order.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">{order.orderNumber}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {lang === 'ar' ? (order.customerNameAr || order.customerName) : order.customerName}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground shrink-0">
+                    {formatPriceWithCurrency(order.totalAmount as Piastres, lang)}
+                  </p>
+                  <OrderStatusBadge status={order.status} lang={lang} />
                 </div>
-                <p className="text-sm font-semibold text-foreground shrink-0">{order.amount}</p>
-                <OrderStatusBadge status={order.status} lang={lang} />
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground py-4 text-center">{t(lang, 'adminNoOrdersYet')}</p>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Top Products */}
+      {topProducts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <TrendingUp className="size-4 text-muted-foreground" />
+              {t(lang, 'adminTopProducts')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {topProducts.map((product: {
+                id: string;
+                nameEn: string;
+                nameAr: string;
+                icon: string;
+                totalSold: number;
+                price: number;
+                stock: number;
+              }) => (
+                <div key={product.id} className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xl shrink-0">{product.icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {lang === 'ar' ? product.nameAr : product.nameEn}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {product.totalSold} sold
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground shrink-0">
+                    {formatPriceWithCurrency(product.price as Piastres, lang)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -343,7 +454,7 @@ function AlertItem({ label, count, severity }: { label: string; count: number; s
   const colors = {
     critical: 'text-red-600 bg-red-50 dark:bg-red-950/30',
     warning: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
-    info: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30',
+    info: 'text-sky-600 bg-sky-50 dark:bg-sky-950/30',
   };
 
   return (
@@ -364,6 +475,9 @@ function OrderStatusBadge({ status, lang }: { status: string; lang: 'en' | 'ar' 
     processing: { key: 'processing', variant: 'secondary' },
     pending: { key: 'pending', variant: 'outline' },
     confirmed: { key: 'confirmed', variant: 'secondary' },
+    out_for_delivery: { key: 'outForDelivery', variant: 'secondary' },
+    cancelled: { key: 'cancelled', variant: 'destructive' },
+    packed: { key: 'packed', variant: 'secondary' },
   };
 
   const config = statusMap[status] || { key: status, variant: 'outline' as const };

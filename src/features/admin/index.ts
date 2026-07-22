@@ -6,6 +6,7 @@ export { default as AdminSidebar } from './components/AdminSidebar';
 export { default as AdminTopbar } from './components/AdminTopbar';
 export { default as AdminContentArea } from './components/AdminContentArea';
 export { default as AdminMobileDrawer } from './components/AdminMobileDrawer';
+export { AdminLoginPage } from './components/AdminLoginPage';
 
 // Admin sub-view components
 export { default as AdminProductManager } from './components/products/AdminProductManager';

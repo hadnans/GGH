@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { useAdminStore, type AdminSubView } from '@/stores/admin-store';
+import { useAdminSessionStore } from '@/stores/admin-session-store';
 import { useLangStore } from '@/stores/lang-store';
 import { t } from '@/lib/ggh/i18n';
 import { Button } from '@/components/ui/button';
@@ -58,6 +59,7 @@ interface AdminTopbarProps {
 export default function AdminTopbar({ lang, onExitAdmin }: AdminTopbarProps) {
   const { isRTL, toggleLang } = useLangStore();
   const { currentSubView, sidebarCollapsed, toggleSidebar, setSidebarMobileOpen } = useAdminStore();
+  const { admin } = useAdminSessionStore();
   const [searchValue, setSearchValue] = useState('');
 
   const titleKey = subViewTitleKeys[currentSubView] || 'adminDashboard';
@@ -68,6 +70,9 @@ export default function AdminTopbar({ lang, onExitAdmin }: AdminTopbarProps) {
   }, [setSidebarMobileOpen]);
 
   const ExitIcon = isRTL ? ArrowRight : ArrowLeft;
+
+  const adminName = admin ? (lang === 'ar' ? admin.nameAr : admin.nameEn) : 'Admin';
+  const adminInitials = adminName.substring(0, 2).toUpperCase();
 
   return (
     <header
@@ -159,18 +164,18 @@ export default function AdminTopbar({ lang, onExitAdmin }: AdminTopbarProps) {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="hidden sm:flex items-center gap-2 px-2 shrink-0" aria-label={t(lang, 'adminUserMenu')}>
             <Avatar className="size-7">
-              <AvatarFallback className="text-xs bg-primary text-primary-foreground font-medium">
-                AD
+              <AvatarFallback className="text-xs bg-emerald-600 text-white font-medium">
+                {adminInitials}
               </AvatarFallback>
             </Avatar>
             <span className="text-sm font-medium text-foreground truncate max-w-[80px]">
-              Admin
+              {adminName}
             </span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align={isRTL ? 'start' : 'end'} className="w-48">
           <DropdownMenuLabel className="text-xs text-muted-foreground">
-            {t(lang, 'adminPortal')}
+            {admin?.email || 'admin@ggh.com'}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => useAdminStore.getState().setSubView('settings')}>

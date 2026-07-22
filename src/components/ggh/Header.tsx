@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, ShoppingCart, Menu, X, User, Globe, Package } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, User, Globe, Package, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ interface HeaderProps {
   onSearchClick?: () => void;
   onAccountClick?: () => void;
   onOrdersClick?: () => void;
+  onAdminClick?: () => void;
   isAuthenticated?: boolean;
   customerName?: string;
 }
@@ -28,6 +29,7 @@ export default function Header({
   onSearchClick,
   onAccountClick,
   onOrdersClick,
+  onAdminClick,
 }: HeaderProps) {
   const { lang, isRTL, toggleLang } = useLangStore();
   const { getItemCount, openCart } = useCartStore();
@@ -179,6 +181,16 @@ export default function Header({
                 {cartCount}
               </Badge>
             )}
+          </Button>
+
+          {/* Admin Portal (hidden small icon, only visible to those who know) */}
+          <Button
+            variant="ghost"
+            className="h-12 w-12 shrink-0 hidden lg:flex"
+            onClick={onAdminClick}
+            aria-label="Admin"
+          >
+            <Shield className="size-4" style={{ color: 'var(--ggh-text-secondary)' }} />
           </Button>
 
           {/* Account icon */}

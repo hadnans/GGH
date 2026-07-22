@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCartStore } from '@/stores/cart-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLangStore } from '@/stores/lang-store';
+import { useAdminSessionStore } from '@/stores/admin-session-store';
 
 // i18n
 import { t } from '@/lib/ggh/i18n';
@@ -39,6 +40,7 @@ import WarehouseDashboard from '@/features/delivery/components/WarehouseDashboar
 
 // Admin Feature Components
 import { AdminLayout } from '@/features/admin';
+import { AdminLoginPage } from '@/features/admin/components/AdminLoginPage';
 
 // UI Components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -52,6 +54,7 @@ export default function Home() {
   const { lang, isRTL, toggleLang } = useLangStore();
   const { isAuthenticated, customer, login: authLogin, logout: authLogout } = useAuthStore();
   const { openCart, getItemCount } = useCartStore();
+  const adminSession = useAdminSessionStore();
 
   const [currentView, setCurrentView] = useState<AppView>('shop');
   const [showLoginDialog, setShowLoginDialog] = useState(false);
@@ -71,9 +74,27 @@ export default function Home() {
     seededRef.current = true;
     fetch('/api/seed', { method: 'POST' })
       .then((res) => res.json())
-      .then(() => setSeedComplete(true))
+      .then(() => {
+        setSeedComplete(true);
+        // Also seed admin data on first load
+        fetch('/api/admin/seed-admin', { method: 'POST' })
+          .then(() => {})
+          .catch(() => {});
+      })
       .catch(() => setSeedComplete(true));
   }, []);
+
+  // ============================================
+  // CHECK ADMIN SESSION ON LOAD
+  // ============================================
+  const checkAdminSessionRef = useRef(adminSession.checkSession);
+  checkAdminSessionRef.current = adminSession.checkSession;
+
+  useEffect(() => {
+    if (currentView === 'admin') {
+      checkAdminSessionRef.current();
+    }
+  }, [currentView]);
 
   // ============================================
   // FETCH DATA
@@ -178,6 +199,23 @@ export default function Home() {
   }, [authLogout]);
 
   // ============================================
+  // ADMIN AUTH HANDLERS
+  // ============================================
+  const handleAdminLoginSuccess = useCallback(() => {
+    setCurrentView('admin');
+  }, []);
+
+  const handleAdminLogout = useCallback(async () => {
+    try {
+      await fetch('/api/admin/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    adminSession.logout();
+    setCurrentView('shop');
+  }, [adminSession]);
+
+  // ============================================
   // CHECKOUT HANDLERS
   // ============================================
   const handleCheckoutComplete = useCallback((_order: Order) => {
@@ -189,6 +227,29 @@ export default function Home() {
   // ============================================
   // RENDER
   // ============================================
+
+  // Admin Mode — requires authentication
+  if (currentView === 'admin') {
+    if (!adminSession.isAuthenticated) {
+      return (
+        <div className="min-h-screen flex flex-col">
+          <AdminLoginPage
+            lang={lang}
+            onToggleLang={toggleLang}
+            onLoginSuccess={handleAdminLoginSuccess}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        <AdminLayout lang={lang} onExitAdmin={handleAdminLogout} />
+      </div>
+    );
+  }
+
+  // Storefront Mode
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--ggh-bg)' }}>
       {/* Skip to content */}
@@ -196,11 +257,6 @@ export default function Home() {
         {t(lang, 'skipToContent')}
       </a>
 
-      {/* Admin Mode — full admin layout replaces storefront layout */}
-      {currentView === 'admin' ? (
-        <AdminLayout lang={lang} onExitAdmin={() => setCurrentView('shop')} />
-      ) : (
-      <>
       {/* Header */}
       <Header
         lang={lang}
@@ -222,6 +278,7 @@ export default function Home() {
             setShowLoginDialog(true);
           }
         }}
+        onAdminClick={() => setCurrentView('admin')}
         isAuthenticated={isAuthenticated}
         customerName={customer?.firstName || ''}
       />
@@ -412,8 +469,6 @@ export default function Home() {
           el?.scrollIntoView({ behavior: 'smooth' });
         }}
       />
-      </>
-      )}
     </div>
   );
 }

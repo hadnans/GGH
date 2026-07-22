@@ -242,6 +242,20 @@ export const translations: Record<Lang, TranslationSet> = {
     adminThisMonth: 'This Month',
     adminSystemHealth: 'System Health',
     adminAllSystems: 'All systems operational',
+    adminLoading: 'Loading dashboard...',
+    adminNoAlerts: 'No low stock alerts',
+    adminNoOrdersYet: 'No orders yet',
+    adminTopProducts: 'Top Products',
+
+    // Order Status Names (EN)
+    delivered: 'Delivered',
+    processing: 'Processing',
+    pending: 'Pending',
+    confirmed: 'Confirmed',
+    outForDelivery: 'Out for Delivery',
+    packed: 'Packed',
+    cancelled: 'Cancelled',
+    returned: 'Returned',
 
     // Admin CRUD / Common
     adminCreate: 'Create',
@@ -684,8 +698,22 @@ export const translations: Record<Lang, TranslationSet> = {
     adminThisMonth: 'هذا الشهر',
     adminSystemHealth: 'حالة النظام',
     adminAllSystems: 'كل الأنظمة تعمل',
+    adminLoading: 'جاري تحميل لوحة التحكم...',
+    adminNoAlerts: 'لا توجد تنبيهات مخزون',
+    adminNoOrdersYet: 'لا توجد طلبات حتى الآن',
+    adminTopProducts: 'أفضل المنتجات',
 
-    // Admin CRUD / Common
+    // Order Status Names (AR)
+    delivered: 'تم التوصيل',
+    processing: 'قيد المعالجة',
+    pending: 'قيد الانتظار',
+    confirmed: 'مؤكد',
+    outForDelivery: 'خرج للتوصيل',
+    packed: 'تم التعبئة',
+    cancelled: 'ملغي',
+    returned: 'مرتجع',
+
+    // Admin CRUD / Common (AR)
     adminCreate: 'إنشاء',
     adminEditItem: 'تعديل',
     adminDeleteItem: 'حذف',
