@@ -1,5 +1,5 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
+  "name": "ggh",
   "version": "0.2.0",
   "private": true,
   "scripts": {
@@ -7,11 +7,12 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production node .next/standalone/server.js",
     "lint": "eslint .",
-    "setup": "bun install && bun run db:generate && bun run db:push && echo '✅ Setup complete! Run bun run dev to start the development server'",
+    "setup": "bun install && bun run db:push && echo \"\u2705 Setup complete! Run bun run dev to start\"",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

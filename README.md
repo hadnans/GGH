@@ -23,6 +23,8 @@ bun run dev
 
 Open http://localhost:3000 — the database seeds automatically on first visit with sample products, categories, deals, and a default admin account.
 
+> **Note**: If you don't have bun installed, you can use npm instead: `npm run setup` and `npm run dev`
+
 ## Default Admin Account
 
 | Field    | Value          |
