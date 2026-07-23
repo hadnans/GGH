@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -87,14 +87,11 @@ export default function Home() {
   // ============================================
   // CHECK ADMIN SESSION ON LOAD
   // ============================================
-  const checkAdminSessionRef = useRef(adminSession.checkSession);
-  checkAdminSessionRef.current = adminSession.checkSession;
-
   useEffect(() => {
     if (currentView === 'admin') {
-      checkAdminSessionRef.current();
+      adminSession.checkSession();
     }
-  }, [currentView]);
+  }, [currentView, adminSession]);
 
   // ============================================
   // FETCH DATA
